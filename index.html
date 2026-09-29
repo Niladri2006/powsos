@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PawSOS — Animal Emergency & Rescue Coordination</title>
+  <meta name="description" content="Report injured, sick, or distressed animals to local volunteer responders and animal welfare organizations in real time.">
+  
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+</head>
+<body>
+
+  <!-- Top Navigation Placeholder (ui.js) -->
+  <div id="navbar-mount"></div>
+
+  <!-- Hero Section -->
+  <section class="hero-clean">
+    <div class="container hero-clean-grid">
+      <div>
+        <div class="hero-eyebrow">
+          <span>🐾</span>
+          <span>Community Animal Welfare Network</span>
+        </div>
+
+        <h1 class="hero-clean-title">
+          Found an animal that needs help?
+        </h1>
+
+        <p class="hero-clean-lead">
+          Report injured, sick, or trapped street animals in your area. PawSOS notifies nearby verified volunteers, rescue groups, and animal ambulances so care can arrive quickly.
+        </p>
+
+        <div class="hero-btn-group">
+          <a href="report.html" class="btn btn-emergency btn-lg">
+            <span>🚨 Report an Animal in Need</span>
+          </a>
+          <a href="track.html" class="btn btn-secondary btn-lg">
+            <span>🔍 Track a Report</span>
+          </a>
+          <a href="map.html" class="btn btn-subtle btn-lg">
+            <span>View Active Reports →</span>
+          </a>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 1.5rem; font-size: 0.85rem; color: var(--text-muted); flex-wrap: wrap;">
+          <span>✓ 100% Free public service</span>
+          <span>✓ Real-time map location</span>
+          <span>✓ Direct volunteer coordination</span>
+        </div>
+      </div>
+
+      <div>
+        <div class="hero-image-box">
+          <img src="assets/hero-banner.jpg" alt="Volunteers caring for an injured dog on the street">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Quick Guidance Banner: When to call vs report -->
+  <section style="background: var(--bg-surface); border-bottom: 1px solid var(--border-light); padding: 1.75rem 0;">
+    <div class="container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
+      <div style="display: flex; gap: 1rem; align-items: flex-start;">
+        <span style="font-size: 1.75rem; color: var(--emergency-red); line-height: 1;">⚠️</span>
+        <div>
+          <h4 style="font-size: 0.95rem; margin-bottom: 0.25rem;">Severe Life-Threatening Emergency?</h4>
+          <p style="font-size: 0.88rem; margin: 0;">
+            If the animal is in critical shock or heavy arterial bleeding and you can transport, call nearest clinic or dial <a href="tel:1962" style="font-weight: 700; color: var(--emergency-red);">1962</a> immediately.
+          </p>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 1rem; align-items: flex-start;">
+        <span style="font-size: 1.75rem; color: var(--brand-primary); line-height: 1;">📍</span>
+        <div>
+          <h4 style="font-size: 0.95rem; margin-bottom: 0.25rem;">Need Community Rescue Assistance?</h4>
+          <p style="font-size: 0.88rem; margin: 0;">
+            Use our <a href="report.html" style="font-weight: 700;">online reporting form</a> to share photo, exact location, and condition so local responders can mobilize.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works Section -->
+  <section class="section">
+    <div class="container">
+      <div class="section-head">
+        <div class="section-eyebrow">Clear Process</div>
+        <h2 class="section-title">How Animal Rescue Reporting Works</h2>
+        <p class="section-desc">
+          We connect people on the ground with rescue volunteers in their locality without lost WhatsApp forwards.
+        </p>
+      </div>
+
+      <div class="steps-grid">
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <h3>Submit Incident Details</h3>
+          <p>
+            Select animal type, indicate whether the situation is critical, take a quick photo, and confirm your location on the map.
+          </p>
+        </div>
+
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <h3>Local Responders Notified</h3>
+          <p>
+            Your report is sent to verified community volunteers and animal welfare groups operating within that neighborhood.
+          </p>
+        </div>
+
+        <div class="step-item">
+          <div class="step-num">3</div>
+          <h3>Volunteer Accepts Case</h3>
+          <p>
+            A responder acknowledges the alert, provides an estimated arrival time, and prepares appropriate transport or first aid.
+          </p>
+        </div>
+
+        <div class="step-item">
+          <div class="step-num">4</div>
+          <h3>Care & Status Updates</h3>
+          <p>
+            Follow your report online with your reference ID to see when help arrives and the animal is admitted to veterinary care.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Active Community Reports Section -->
+  <section class="section" style="background: var(--bg-surface); border-top: 1px solid var(--border-light); border-bottom: 1px solid var(--border-light);">
+    <div class="container">
+      <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
+        <div>
+          <div class="section-eyebrow">Live Activity</div>
+          <h2 class="section-title" style="margin-bottom: 0.25rem;">Recent Community Reports</h2>
+          <p style="font-size: 0.95rem; color: var(--text-secondary); margin: 0;">
+            Cases currently logged in the local network.
+          </p>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem;">
+          <a href="map.html" class="btn btn-secondary btn-sm">🗺️ Open Map View</a>
+          <a href="report.html" class="btn btn-emergency btn-sm">+ Report Animal</a>
+        </div>
+      </div>
+
+      <div class="cases-grid" id="recent-cases-grid">
+        <!-- Rendered dynamically by store.js -->
+      </div>
+    </div>
+  </section>
+
+  <!-- Practical First Aid Guidance Preview -->
+  <section class="section">
+    <div class="container">
+      <div class="section-head">
+        <div class="section-eyebrow">Immediate Action</div>
+        <h2 class="section-title">What to Do While Waiting for Help</h2>
+        <p class="section-desc">
+          Simple guidelines to keep both you and the animal safe at the scene.
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
+        <div class="card">
+          <h3 style="font-size: 1.15rem; margin-bottom: 0.5rem; color: var(--text-main);">1. Stay at a Safe Distance</h3>
+          <p style="font-size: 0.9rem; line-height: 1.5; color: var(--text-secondary);">
+            Injured animals are frightened and may bite out of self-defense. Do not corner them or make sudden movements. Keep children and other pets away.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3 style="font-size: 1.15rem; margin-bottom: 0.5rem; color: var(--text-main);">2. Do Not Force Food or Water</h3>
+          <p style="font-size: 0.9rem; line-height: 1.5; color: var(--text-secondary);">
+            Never pour liquids into the mouth of an animal that is in shock, lying down, or unconscious. Liquid can enter the windpipe and cause choking.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3 style="font-size: 1.15rem; margin-bottom: 0.5rem; color: var(--text-main);">3. Keep the Animal in Sight</h3>
+          <p style="font-size: 0.9rem; line-height: 1.5; color: var(--text-secondary);">
+            If possible, remain nearby until the responder arrives so you can point out the exact spot. Animals often try to crawl into hiding spots.
+          </p>
+        </div>
+      </div>
+
+      <div style="text-align: center; margin-top: 2rem;">
+        <a href="about.html#first-aid" class="btn btn-secondary">
+          Read Full Emergency First Aid Handbook →
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Volunteer Callout -->
+  <section style="background: var(--brand-primary-light); border-top: 1px solid var(--brand-primary-border); border-bottom: 1px solid var(--brand-primary-border); padding: 3.5rem 0;">
+    <div class="container-narrow" style="text-align: center;">
+      <h2 style="font-size: 1.85rem; color: var(--brand-primary); margin-bottom: 0.75rem;">
+        Are you an animal welfare volunteer or rescuer?
+      </h2>
+      <p style="color: var(--text-secondary); font-size: 1.05rem; margin-bottom: 1.75rem;">
+        Join our verified local responder network. Receive notifications when an animal needs rescue or transport in your neighborhood.
+      </p>
+      <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+        <a href="about.html#volunteer" class="btn btn-primary btn-lg">Register as Volunteer</a>
+        <a href="dashboard.html" class="btn btn-secondary btn-lg">Responder Portal</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="container footer-top-grid">
+      <div>
+        <div class="brand-link" style="margin-bottom: 0.5rem;">
+          <div class="brand-emblem">🐾</div>
+          <div class="brand-text-wrap">
+            <div class="brand-name">Paw<span>SOS</span></div>
+          </div>
+        </div>
+        <p class="footer-lead">
+          A community animal rescue coordination network connecting citizens with local responders, animal welfare organizations, and veterinarians.
+        </p>
+      </div>
+
+      <div>
+        <h4 class="footer-col-title">Quick Actions</h4>
+        <ul class="footer-link-list">
+          <li><a href="report.html">Report Animal in Need</a></li>
+          <li><a href="track.html">Track a Case</a></li>
+          <li><a href="map.html">Active Reports Map</a></li>
+          <li><a href="dashboard.html">Responder Portal</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <h4 class="footer-col-title">Resources</h4>
+        <ul class="footer-link-list">
+          <li><a href="about.html#first-aid">Animal First Aid Guide</a></li>
+          <li><a href="about.html#helplines">Emergency Helpline Directory</a></li>
+          <li><a href="about.html#volunteer">Volunteer Sign-up</a></li>
+          <li><a href="about.html">About PawSOS</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <h4 class="footer-col-title">Emergency Helplines</h4>
+        <div style="font-size: 0.88rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.5rem;">
+          <div>🚨 <strong>National Animal Ambulance:</strong> <a href="tel:1962" style="color: var(--emergency-red); font-weight: 700;">1962</a></div>
+          <div>🐕 <strong>Local Animal Welfare:</strong> <a href="tel:9829099999">+91 98290 99999</a></div>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.4rem;">
+            Helplines are toll-free and operated by government / welfare organizations.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="container footer-bottom-bar">
+      <div>&copy; 2026 PawSOS Initiative. Dedicated to stray and community animal welfare.</div>
+      <div style="display: flex; gap: 1.5rem;">
+        <a href="about.html">About</a>
+        <a href="track.html">Status Tracker</a>
+        <a href="about.html#helplines">Helplines</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="js/api.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/map-utils.js"></script>
+  <script src="js/ui.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      renderRecentCases();
+
+      if (window.pawStore) {
+        window.pawStore.subscribe(() => {
+          renderRecentCases();
+        });
+      }
+    });
+
+    function renderRecentCases() {
+      const grid = document.getElementById('recent-cases-grid');
+      if (!grid || !window.pawStore) return;
+
+      const cases = window.pawStore.getAllCases().slice(0, 3); // Top 3 recent
+      if (cases.length === 0) {
+        grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 2rem; color: var(--text-muted);">No active cases reported in this area.</div>';
+        return;
+      }
+
+      grid.innerHTML = cases.map(c => {
+        let badgeClass = 'badge-neutral';
+        if (c.urgency === 'critical') badgeClass = 'badge-emergency';
+        else if (c.urgency === 'urgent') badgeClass = 'badge-urgent';
+
+        let statusText = 'Reported';
+        let statusBadge = 'badge-neutral';
+        if (c.status === 'assigned') { statusText = 'Responder Assigned'; statusBadge = 'badge-urgent'; }
+        else if (c.status === 'in_progress') { statusText = 'In Progress'; statusBadge = 'badge-urgent'; }
+        else if (c.status === 'resolved') { statusText = 'Resolved'; statusBadge = 'badge-resolved'; }
+
+        return `
+          <div class="case-card">
+            <div class="case-card-thumb">
+              <img src="${c.photo || 'assets/dog-sample.jpg'}" alt="${c.animalName}" onerror="this.src='assets/dog-sample.jpg'">
+              <div class="case-card-badges">
+                <span class="badge ${badgeClass}">${c.urgency}</span>
+                <span class="badge ${statusBadge}">${statusText}</span>
+              </div>
+            </div>
+
+            <div class="case-card-content">
+              <div class="case-meta-line">
+                <span style="font-family: var(--font-mono); font-weight: 700;">#${c.id}</span>
+                <span>•</span>
+                <span>${timeAgo(c.createdAt)}</span>
+              </div>
+
+              <h3 class="case-card-title">${c.animalName}</h3>
+              <p class="case-card-summary">${c.condition}</p>
+
+              <div class="case-location-row">
+                <span>📍</span>
+                <span>${c.location ? c.location.area || c.location.city : 'Local Area'}</span>
+              </div>
+
+              <div class="case-card-actions">
+                <a href="case.html?id=${c.id}" class="btn btn-secondary btn-sm" style="flex: 1;">
+                  Track Status
+                </a>
+                <a href="map.html" class="btn btn-subtle btn-sm">
+                  View Map →
+                </a>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function timeAgo(dateString) {
+      if (!dateString) return 'Recently';
+      const now = new Date();
+      const past = new Date(dateString);
+      const diffMinutes = Math.floor((now - past) / 60000);
+      if (diffMinutes < 1) return 'Just now';
+      if (diffMinutes < 60) return `${diffMinutes}m ago`;
+      const diffHours = Math.floor(diffMinutes / 60);
+      if (diffHours < 24) return `${diffHours}h ago`;
+      return `${Math.floor(diffHours / 24)}d ago`;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Case Status Tracker — PawSOS</title>
+  <meta name="description" content="Track live responder updates, location, and veterinary progress for your reported animal rescue case.">
+  
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+  <style>
+    .case-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 2rem;
+    }
+
+    .timeline-stream {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      position: relative;
+      padding-left: 1.5rem;
+      margin-top: 1rem;
+    }
+
+    .timeline-stream::before {
+      content: '';
+      position: absolute;
+      left: 6px;
+      top: 6px;
+      bottom: 6px;
+      width: 2px;
+      background: var(--border-light);
+    }
+
+    .timeline-point {
+      position: relative;
+    }
+
+    .timeline-point::before {
+      content: '';
+      position: absolute;
+      left: -1.5rem;
+      top: 6px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--brand-primary);
+      border: 2px solid white;
+      box-shadow: 0 0 0 1px var(--border-strong);
+    }
+
+    .timeline-point.resolved::before {
+      background: var(--status-green);
+    }
+
+    @media (max-width: 860px) {
+      .case-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Placeholder (ui.js) -->
+  <div id="navbar-mount"></div>
+
+  <main class="container" style="padding-top: 2.5rem; padding-bottom: 5rem;">
+
+    <!-- Top Case Header Bar -->
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--border-light);">
+      <div>
+        <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.35rem;">
+          <a href="track.html" style="font-size: 0.85rem; color: var(--text-muted); text-decoration: none;">← All Reports</a>
+          <span style="color: var(--border-strong);">•</span>
+          <span class="badge badge-emergency" id="case-urgency-badge">URGENT</span>
+          <span class="badge badge-neutral" id="case-status-badge">REPORTED</span>
+        </div>
+        <h1 style="font-size: 1.85rem; margin: 0;" id="case-title-heading">
+          Case #PAW-1024 — Injured Indie Dog
+        </h1>
+      </div>
+
+      <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <button class="btn btn-secondary btn-sm" onclick="copyReferenceCode()">
+          <span>📋 Copy Code</span>
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="shareCaseLink()">
+          <span>🔗 Share Link</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 4-Stage Status Progress Stepper -->
+    <div class="stepper-clean">
+      <div class="step-node" id="step-node-reported">
+        <div class="step-node-number">STEP 1</div>
+        <div class="step-node-title">Report Received</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;" id="step-time-reported">—</div>
+      </div>
+
+      <div class="step-node" id="step-node-assigned">
+        <div class="step-node-number">STEP 2</div>
+        <div class="step-node-title">Responder Assigned</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;" id="step-time-assigned">—</div>
+      </div>
+
+      <div class="step-node" id="step-node-inprogress">
+        <div class="step-node-number">STEP 3</div>
+        <div class="step-node-title">On Scene / Care</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;" id="step-time-inprogress">—</div>
+      </div>
+
+      <div class="step-node" id="step-node-resolved">
+        <div class="step-node-number">STEP 4</div>
+        <div class="step-node-title">Resolved & Safe</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;" id="step-time-resolved">—</div>
+      </div>
+    </div>
+
+    <!-- Main Two-Column Case Details -->
+    <div class="case-grid">
+
+      <!-- Left Column: Case Information & Photos -->
+      <div>
+        
+        <!-- Photo Frame -->
+        <div style="background: #e2e8f0; border-radius: var(--radius-md); overflow: hidden; margin-bottom: 1.5rem; height: 320px; border: 1px solid var(--border-light);">
+          <img id="case-photo-img" src="assets/dog-sample.jpg" alt="Reported Animal" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='assets/dog-sample.jpg'">
+        </div>
+
+        <!-- Incident Summary Card -->
+        <div class="card" style="margin-bottom: 1.5rem;">
+          <h3 style="font-size: 1.15rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-light); padding-bottom: 0.5rem;">
+            Report Summary
+          </h3>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+              <div style="font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase;">Animal Species</div>
+              <div style="font-weight: 700; font-size: 0.95rem;" id="case-species-text">Dog (Indie)</div>
+            </div>
+            <div>
+              <div style="font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase;">Logged At</div>
+              <div style="font-weight: 600; font-size: 0.95rem;" id="case-logged-time">Just now</div>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 1rem;">
+            <div style="font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.2rem;">Distress Condition</div>
+            <div style="font-size: 0.95rem; font-weight: 600; color: var(--emergency-red);" id="case-condition-text">
+              Road accident impact. Suspected front left leg fracture.
+            </div>
+          </div>
+
+          <div style="margin-bottom: 1rem;">
+            <div style="font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.2rem;">Scene & Identification Notes</div>
+            <p style="font-size: 0.9rem; color: var(--text-secondary); margin: 0; line-height: 1.5;" id="case-description-text">
+              Found lying beside the pavement near traffic signal. Responsive but in visible pain.
+            </p>
+          </div>
+
+          <div style="margin-bottom: 1rem;">
+            <div style="font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.2rem;">Reported Location</div>
+            <div style="font-size: 0.9rem; font-weight: 600;" id="case-location-address">
+              Address provided
+            </div>
+          </div>
+
+          <div style="border-top: 1px solid var(--border-light); padding-top: 0.75rem;">
+            <div style="font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.2rem;">Reporter Contact</div>
+            <div style="font-size: 0.9rem;" id="case-reporter-info">
+              <span>Citizen</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Location Map Snippet -->
+        <div class="card" style="margin-bottom: 1.5rem; padding: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <h4 style="font-size: 0.95rem; margin: 0;">📍 Location on Map</h4>
+            <a href="map.html" style="font-size: 0.8rem; color: var(--brand-primary); font-weight: 600;">View Area Map →</a>
+          </div>
+          <div class="map-canvas" id="case-detail-map" style="height: 240px;"></div>
+        </div>
+
+        <!-- Activity Timeline & Add Note -->
+        <div class="card">
+          <h3 style="font-size: 1.15rem; margin-bottom: 0.5rem;">Rescue Progress Log</h3>
+          <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Real-time updates posted by responders and the reporter.
+          </p>
+
+          <div class="timeline-stream" id="case-timeline-stream">
+            <!-- Rendered dynamically -->
+          </div>
+
+          <!-- Add Note Form -->
+          <div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border-light);">
+            <label class="form-label" for="add-note-input" style="font-size: 0.88rem;">
+              Post a scene update or comment:
+            </label>
+            <div style="display: flex; gap: 0.5rem;">
+              <input type="text" class="form-control" id="add-note-input" placeholder="e.g. Dog has moved under tea stall shade to avoid rain...">
+              <button class="btn btn-secondary btn-sm" onclick="postCaseNote()">Post</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Column: Responder Status & Coordination -->
+      <div>
+        
+        <!-- Responder Status Card -->
+        <div class="card" id="responder-assignment-box" style="margin-bottom: 1.5rem; border-left: 4px solid var(--brand-primary);">
+          <div style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--brand-primary); margin-bottom: 0.5rem;">
+            Assigned Responder
+          </div>
+
+          <div id="responder-content-wrap">
+            <!-- Rendered dynamically depending on assigned or unassigned -->
+          </div>
+        </div>
+
+        <!-- Safety Advice While Waiting -->
+        <div class="card" style="background: #fffbeb; border-color: #fef3c7; margin-bottom: 1.5rem;">
+          <h4 style="font-size: 0.95rem; color: #92400e; margin-bottom: 0.5rem;">
+            ⚠️ Essential Advice for Bystanders
+          </h4>
+          <ul style="font-size: 0.85rem; color: #78350f; padding-left: 1.2rem; line-height: 1.5; display: flex; flex-direction: column; gap: 0.35rem;">
+            <li>Keep a respectful distance to avoid causing panic in the injured animal.</li>
+            <li>Do not attempt to muzzle an animal with breathing difficulties or vomiting.</li>
+            <li>In high heat, provide shade with an umbrella or cardboard if safe to approach.</li>
+          </ul>
+        </div>
+
+        <!-- Responder Management Controls (For volunteers) -->
+        <div class="card" id="volunteer-actions-card" style="padding: 1.25rem;">
+          <h4 style="font-size: 0.95rem; margin-bottom: 0.75rem; color: var(--text-main);">
+            🦸 Responder Controls
+          </h4>
+          <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Are you a volunteer responding to this animal? Update case progress:
+          </p>
+
+          <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+            <button class="btn btn-secondary btn-block btn-sm" onclick="setQuickStatus('in_progress', 'Volunteer arrived on scene. Assessing animal.')">
+              📍 Mark 'Arrived on Scene'
+            </button>
+            <button class="btn btn-secondary btn-block btn-sm" onclick="setQuickStatus('in_progress', 'Transporting animal to veterinary clinic for treatment.')">
+              🚑 Mark 'Transporting to Clinic'
+            </button>
+            <button class="btn btn-primary btn-block btn-sm" onclick="setQuickStatus('resolved', 'Animal received medical care, stabilized, and safely sheltered.')">
+              ✓ Mark 'Rescue Resolved'
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Accept Dispatch Modal -->
+  <div id="modal-accept-case" style="display: none; position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.6); align-items: center; justify-content: center; padding: 1.5rem;">
+    <div class="card" style="max-width: 440px; width: 100%;">
+      <h3 style="font-size: 1.2rem; margin-bottom: 0.5rem;">Accept Rescue Dispatch</h3>
+      <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
+        Confirm that you are able to respond to this animal. You will coordinate with the citizen reporter.
+      </p>
+
+      <div class="form-group">
+        <label class="form-label">Your Name</label>
+        <input type="text" class="form-control" id="acc-responder-name" value="Rahul Sharma">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Estimated Arrival Time</label>
+        <select class="form-control" id="acc-responder-eta">
+          <option value="~10 mins">~10 Minutes (Nearby)</option>
+          <option value="~20 mins" selected>~20 Minutes (In Transit)</option>
+          <option value="~35 mins">~35 Minutes (Arranging Vehicle)</option>
+        </select>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+        <button class="btn btn-secondary btn-sm" onclick="closeAcceptModal()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="confirmAcceptCase()">Confirm & Accept</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="js/api.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/map-utils.js"></script>
+  <script src="js/ui.js"></script>
+
+  <script>
+    let activeCase = null;
+    let detailMap = null;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await loadCase();
+
+      if (window.pawStore) {
+        window.pawStore.subscribe(() => {
+          loadCase(false);
+        });
+      }
+    });
+
+    function getParam(param) {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get(param);
+    }
+
+    async function loadCase(renderMap = true) {
+      if (!window.pawStore) return;
+
+      const caseId = getParam('id') || 'PAW-4812';
+      activeCase = window.pawStore.getCaseById(caseId);
+
+      if (!activeCase && window.pawStore.fetchFreshCaseById) {
+        activeCase = await window.pawStore.fetchFreshCaseById(caseId);
+      }
+
+      if (!activeCase) {
+        // Fallback to first available
+        activeCase = window.pawStore.getAllCases()[0];
+      }
+
+      if (!activeCase) {
+        document.querySelector('main').innerHTML = `
+          <div class="card" style="text-align: center; padding: 3rem;">
+            <h2>Case Not Found</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">The requested report reference does not exist or has been removed.</p>
+            <a href="track.html" class="btn btn-primary">Go to Case Lookup</a>
+          </div>
+        `;
+        return;
+      }
+
+      renderCaseUI();
+      if (renderMap) {
+        initCaseMap();
+      }
+    }
+
+    function renderCaseUI() {
+      const c = activeCase;
+      document.title = `Case ${c.id} (${c.animalName}) — PawSOS Tracker`;
+
+      document.getElementById('case-title-heading').textContent = `Case #${c.id} — ${c.animalName}`;
+      document.getElementById('case-species-text').textContent = c.animalName;
+      document.getElementById('case-logged-time').textContent = timeAgo(c.createdAt);
+      document.getElementById('case-condition-text').textContent = c.condition;
+      document.getElementById('case-description-text').textContent = c.description || 'No scene notes provided.';
+      document.getElementById('case-location-address').textContent = c.location ? c.location.address : 'Location provided';
+
+      const repEl = document.getElementById('case-reporter-info');
+      if (repEl) {
+        const rep = c.reporter || {};
+        repEl.innerHTML = `
+          <strong>${rep.name || 'Citizen'}</strong>
+          ${rep.phone ? `<span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 0.5rem;">(${rep.phone})</span>` : ''}
+        `;
+      }
+
+      if (c.photo) {
+        document.getElementById('case-photo-img').src = c.photo;
+      }
+
+      // Urgency Badge
+      const urgBadge = document.getElementById('case-urgency-badge');
+      urgBadge.textContent = c.urgency.toUpperCase();
+      if (c.urgency === 'critical') urgBadge.className = 'badge badge-emergency';
+      else if (c.urgency === 'urgent') urgBadge.className = 'badge badge-urgent';
+      else urgBadge.className = 'badge badge-neutral';
+
+      // Status Badge
+      const statBadge = document.getElementById('case-status-badge');
+      statBadge.textContent = c.status.replace('_', ' ').toUpperCase();
+      if (c.status === 'resolved') statBadge.className = 'badge badge-resolved';
+      else if (c.status === 'reported') statBadge.className = 'badge badge-neutral';
+      else statBadge.className = 'badge badge-urgent';
+
+      // Stepper
+      updateStepper(c.status, c.timeline);
+
+      // Timeline Stream
+      renderTimelineStream(c.timeline || []);
+
+      // Responder Box
+      renderResponderBox(c);
+    }
+
+    function updateStepper(status, timeline) {
+      const n1 = document.getElementById('step-node-reported');
+      const n2 = document.getElementById('step-node-assigned');
+      const n3 = document.getElementById('step-node-inprogress');
+      const n4 = document.getElementById('step-node-resolved');
+
+      [n1, n2, n3, n4].forEach(n => {
+        n.classList.remove('completed', 'active');
+      });
+
+      if (status === 'reported') {
+        n1.classList.add('active');
+      } else if (status === 'assigned') {
+        n1.classList.add('completed');
+        n2.classList.add('active');
+      } else if (status === 'in_progress') {
+        n1.classList.add('completed');
+        n2.classList.add('completed');
+        n3.classList.add('active');
+      } else if (status === 'resolved') {
+        n1.classList.add('completed');
+        n2.classList.add('completed');
+        n3.classList.add('completed');
+        n4.classList.add('completed');
+      }
+    }
+
+    function renderTimelineStream(timeline) {
+      const stream = document.getElementById('case-timeline-stream');
+      if (!stream) return;
+
+      stream.innerHTML = timeline.map(t => `
+        <div class="timeline-point ${t.status === 'resolved' ? 'resolved' : ''}">
+          <div style="font-size: 0.88rem; font-weight: 600; color: var(--text-main); margin-bottom: 2px;">
+            ${t.note}
+          </div>
+          <div style="font-size: 0.78rem; color: var(--text-muted);">
+            <span>${timeAgo(t.time)}</span>
+            ${t.author ? `<span> • By ${t.author}</span>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderResponderBox(c) {
+      const wrap = document.getElementById('responder-content-wrap');
+      if (!wrap) return;
+
+      if (c.responder) {
+        wrap.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+            <div>
+              <div style="font-size: 1.05rem; font-weight: 700; color: var(--text-main);">${c.responder.name}</div>
+              <div style="font-size: 0.82rem; color: var(--text-muted);">${c.responder.organization || 'Volunteer Responder'}</div>
+            </div>
+            <div>
+              <span class="badge ${c.status === 'resolved' ? 'badge-resolved' : 'badge-urgent'}">
+                ${c.responder.etaText || 'Assigned'}
+              </span>
+            </div>
+          </div>
+
+          <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+            Vehicle: ${c.responder.vehicle || 'Standard'}
+          </div>
+
+          ${c.responder.phone ? `
+            <a href="tel:${c.responder.phone}" class="btn btn-secondary btn-sm btn-block">
+              📞 Call Assigned Responder
+            </a>
+          ` : ''}
+        `;
+      } else {
+        wrap.innerHTML = `
+          <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+            No volunteer has accepted this dispatch yet. The alert has been sent to nearby members.
+          </div>
+          <button class="btn btn-primary btn-sm btn-block" onclick="openAcceptModal()">
+            Accept This Dispatch (Volunteer)
+          </button>
+        `;
+      }
+    }
+
+    function initCaseMap() {
+      const mapBox = document.getElementById('case-detail-map');
+      if (!mapBox || typeof L === 'undefined' || !activeCase) return;
+
+      const lat = activeCase.location ? activeCase.location.lat : 26.8928;
+      const lng = activeCase.location ? activeCase.location.lng : 75.7485;
+
+      if (!detailMap) {
+        detailMap = L.map('case-detail-map', {
+          center: [lat, lng],
+          zoom: 14,
+          zoomControl: false
+        });
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19
+        }).addTo(detailMap);
+      } else {
+        detailMap.setView([lat, lng], 14);
+      }
+
+      const icon = window.pawMap.createIcon(activeCase.urgency, '📍');
+      L.marker([lat, lng], { icon }).addTo(detailMap);
+    }
+
+    async function postCaseNote() {
+      const input = document.getElementById('add-note-input');
+      const val = input.value.trim();
+      if (!val || !activeCase) return;
+
+      const user = (window.pawAPI && window.pawAPI.getCurrentUser()) || { name: 'Citizen / Community' };
+
+      await window.pawStore.addCaseNote(activeCase.id, val, user.name || 'Citizen');
+      input.value = '';
+      showToast('Scene update note added to timeline', 'success');
+      await loadCase(false);
+    }
+
+    async function setQuickStatus(status, note) {
+      if (!activeCase) return;
+      const user = (window.pawAPI && window.pawAPI.getCurrentUser()) || { name: 'Authorized Dispatcher' };
+
+      await window.pawStore.updateCaseStatus(activeCase.id, status, note, user.name || 'Responder');
+      showToast(`Case status updated: ${status.replace('_', ' ').toUpperCase()}`, 'success');
+      await loadCase(false);
+    }
+
+    function openAcceptModal() {
+      const user = (window.pawAPI && window.pawAPI.getCurrentUser()) || (window.pawStore && window.pawStore.activeUser);
+      const nameInput = document.getElementById('acc-responder-name');
+      if (nameInput && user && user.name) {
+        nameInput.value = user.name;
+      }
+      document.getElementById('modal-accept-case').style.display = 'flex';
+    }
+
+    function closeAcceptModal() {
+      document.getElementById('modal-accept-case').style.display = 'none';
+    }
+
+    async function confirmAcceptCase() {
+      const user = (window.pawAPI && window.pawAPI.getCurrentUser()) || { name: 'Unit 4 Responder', role: 'responder' };
+      const name = document.getElementById('acc-responder-name').value.trim() || user.name || 'Volunteer Rescuer';
+      const eta = document.getElementById('acc-responder-eta').value;
+
+      await window.pawStore.assignResponder(activeCase.id, {
+        name: name,
+        role: user.role || 'responder',
+        organization: user.organization || 'City Animal Rescue Taskforce',
+        phone: user.phone || '+1 555-0248',
+        vehicle: 'Rescue Van / Mobile Kit',
+        etaText: eta
+      });
+
+      closeAcceptModal();
+      showToast(`Case #${activeCase.id} accepted. You are the assigned responder.`, 'success');
+      await loadCase(false);
+    }
+
+    function copyReferenceCode() {
+      if (activeCase && navigator.clipboard) {
+        navigator.clipboard.writeText(activeCase.id);
+        showToast(`Reference code ${activeCase.id} copied!`, 'success');
+      }
+    }
+
+    function shareCaseLink() {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(window.location.href);
+        showToast('Link copied to clipboard', 'success');
+      }
+    }
+
+    function timeAgo(dateString) {
+      if (!dateString) return 'Recently';
+      const now = new Date();
+      const past = new Date(dateString);
+      const diffMinutes = Math.floor((now - past) / 60000);
+      if (diffMinutes < 1) return 'Just now';
+      if (diffMinutes < 60) return `${diffMinutes}m ago`;
+      const diffHours = Math.floor(diffMinutes / 60);
+      if (diffHours < 24) return `${diffHours}h ago`;
+      return `${Math.floor(diffHours / 24)}d ago`;
+    }
+  </script>
+</body>
+</html>

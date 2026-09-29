@@ -1,0 +1,20 @@
+{
+  "name": "pawsos",
+  "version": "1.0.0",
+  "description": "PawSOS — Emergency Animal Rescue & Coordination Platform",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx serve -l 3000 .",
+    "dev": "npx serve -l 3000 .",
+    "serve": "python3 -m http.server 3000"
+  },
+  "keywords": [
+    "animal-rescue",
+    "emergency-response",
+    "hackathon",
+    "leaflet",
+    "pawsos"
+  ],
+  "author": "PawSOS Team",
+  "license": "MIT"
+}

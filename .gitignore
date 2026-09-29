@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+
+/pawsos
+/pawsos.db
+/uploads/*
+!/uploads/.gitkeep
+
+*.log
+.DS_Store

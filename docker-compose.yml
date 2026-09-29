@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pawsos_app
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - HOST=0.0.0.0
+      - ENVIRONMENT=production
+      - DB_DRIVER=postgres
+      - DB_SOURCE=postgres://pawsos_user:pawsos_secure_password_2026@postgres:5432/pawsos_db?sslmode=disable
+      - JWT_SECRET=change_me_to_a_random_32_byte_secret_in_production
+      - STORAGE_DIR=/app/uploads
+      - MAX_UPLOAD_SIZE_MB=5
+      - CORS_ALLOWED_ORIGIN=*
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - pawsos_uploads:/app/uploads
+    networks:
+      - pawsos_network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: pawsos_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=pawsos_user
+      - POSTGRES_PASSWORD=pawsos_secure_password_2026
+      - POSTGRES_DB=pawsos_db
+    volumes:
+      - pawsos_pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pawsos_user -d pawsos_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pawsos_network
+
+volumes:
+  pawsos_uploads:
+    driver: local
+  pawsos_pgdata:
+    driver: local
+
+networks:
+  pawsos_network:
+    driver: bridge

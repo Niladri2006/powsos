@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Report an Animal in Need — PawSOS</title>
+  <meta name="description" content="Submit a report for an injured, sick, or trapped animal to alert nearby volunteer responders and animal welfare organizations.">
+  
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+</head>
+<body>
+
+  <!-- Top Navigation Placeholder (ui.js) -->
+  <div id="navbar-mount"></div>
+
+  <main class="container-narrow" style="padding-top: 2.5rem; padding-bottom: 5rem;">
+
+    <!-- FORM VIEW -->
+    <div id="report-form-container">
+      <div style="margin-bottom: 2rem;">
+        <h1 style="font-size: 2rem; margin-bottom: 0.5rem;">Report an Animal in Need</h1>
+        <p style="color: var(--text-secondary); margin: 0; font-size: 1rem;">
+          Provide key details and location so local volunteers or rescue teams can assist.
+        </p>
+      </div>
+
+      <!-- Life-threatening emergency disclaimer -->
+      <div style="background: #fffbeb; border: 1px solid #fef3c7; border-radius: var(--radius-sm); padding: 0.85rem 1.15rem; margin-bottom: 2rem; display: flex; align-items: flex-start; gap: 0.75rem;">
+        <span style="font-size: 1.25rem; color: #b45309; line-height: 1;">ℹ️</span>
+        <div style="font-size: 0.88rem; color: #92400e;">
+          <strong>Immediate Life Threat:</strong> PawSOS is a community volunteer network. If an animal is suffering catastrophic arterial bleeding or severe traffic trauma and you can arrange immediate transport, consider taking them directly to the nearest animal hospital or dialing <a href="tel:1962" style="font-weight: 700; color: #92400e; text-decoration: underline;">1962</a>.
+        </div>
+      </div>
+
+      <form class="form-card" id="animal-report-form" novalidate>
+
+        <!-- 1. Situation & Urgency -->
+        <div class="form-group">
+          <label class="form-label">
+            1. What happened? <span class="req">*</span>
+          </label>
+          <select class="form-control" id="incident-type" required>
+            <option value="">Select the primary situation...</option>
+            <option value="Road accident / Hit and run">Road accident / Hit and run</option>
+            <option value="Severe open wound / Heavy bleeding">Severe open wound / Heavy bleeding</option>
+            <option value="Bone fracture / Unable to bear weight">Bone fracture / Unable to stand or walk</option>
+            <option value="Trapped in drain, well, or confined space">Trapped in drain, well, or confined space</option>
+            <option value="Severe dehydration / Heatstroke / Weakness">Severe dehydration / Heatstroke / Weakness</option>
+            <option value="Abandoned newborn puppy or kitten litter">Abandoned newborn puppy or kitten litter</option>
+            <option value="Skin infection / Severe mange / Malnutrition">Skin infection / Severe mange / Malnutrition</option>
+            <option value="Animal cruelty or deliberate harm">Animal cruelty or deliberate harm</option>
+            <option value="Other medical distress">Other medical distress</option>
+          </select>
+          <div class="form-hint" id="incident-error" style="color: var(--emergency-red); display: none;">
+            Please select the situation.
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">
+            2. How serious is the situation? <span class="req">*</span>
+          </label>
+          <div class="selector-grid">
+            <div class="selector-item">
+              <input type="radio" name="urgencyLevel" id="urg-critical" value="critical">
+              <label class="selector-label" for="urg-critical">
+                <span class="icon">🔴</span>
+                <span class="title">Critical</span>
+                <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Severe bleeding / Shock</span>
+              </label>
+            </div>
+
+            <div class="selector-item">
+              <input type="radio" name="urgencyLevel" id="urg-urgent" value="urgent" checked>
+              <label class="selector-label" for="urg-urgent">
+                <span class="icon">🟠</span>
+                <span class="title">Urgent</span>
+                <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Fracture / Pain / Trapped</span>
+              </label>
+            </div>
+
+            <div class="selector-item">
+              <input type="radio" name="urgencyLevel" id="urg-moderate" value="moderate">
+              <label class="selector-label" for="urg-moderate">
+                <span class="icon">🟢</span>
+                <span class="title">Moderate</span>
+                <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Sick / Stable / Needs Care</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Animal Details -->
+        <div class="form-group">
+          <label class="form-label">
+            3. Animal Type <span class="req">*</span>
+          </label>
+          <div class="selector-grid">
+            <div class="selector-item">
+              <input type="radio" name="animalSpecies" id="sp-dog" value="dog" checked>
+              <label class="selector-label" for="sp-dog">
+                <span class="icon">🐕</span>
+                <span class="title">Dog</span>
+              </label>
+            </div>
+
+            <div class="selector-item">
+              <input type="radio" name="animalSpecies" id="sp-cat" value="cat">
+              <label class="selector-label" for="sp-cat">
+                <span class="icon">🐈</span>
+                <span class="title">Cat</span>
+              </label>
+            </div>
+
+            <div class="selector-item">
+              <input type="radio" name="animalSpecies" id="sp-cow" value="cow">
+              <label class="selector-label" for="sp-cow">
+                <span class="icon">🐄</span>
+                <span class="title">Cattle</span>
+              </label>
+            </div>
+
+            <div class="selector-item">
+              <input type="radio" name="animalSpecies" id="sp-bird" value="bird">
+              <label class="selector-label" for="sp-bird">
+                <span class="icon">🐦</span>
+                <span class="title">Bird</span>
+              </label>
+            </div>
+
+            <div class="selector-item">
+              <input type="radio" name="animalSpecies" id="sp-other" value="other">
+              <label class="selector-label" for="sp-other">
+                <span class="icon">🐾</span>
+                <span class="title">Other</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="animal-description">
+            4. Brief Description of the Animal
+          </label>
+          <input type="text" class="form-control" id="animal-description" placeholder="e.g. Medium tan indie dog with dark muzzle, no collar">
+          <div class="form-hint">Helps responders identify the exact animal among others in the area.</div>
+        </div>
+
+        <!-- 3. Location -->
+        <div class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap; gap: 0.5rem;">
+            <label class="form-label" style="margin: 0;">
+              5. Incident Location <span class="req">*</span>
+            </label>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-use-gps">
+              <span>📍 Use My Current Location</span>
+            </button>
+          </div>
+
+          <div id="gps-status-indicator" style="font-size: 0.82rem; margin-bottom: 0.5rem; display: none;"></div>
+
+          <input type="text" class="form-control" id="location-address" placeholder="Enter landmark, street name, or area (or tap GPS/map below)" required style="margin-bottom: 0.75rem;">
+          
+          <div class="map-canvas" id="location-picker-map"></div>
+          <div class="form-hint" style="margin-top: 0.4rem;">
+            You can drag the map pin or tap anywhere on the map to pinpoint the exact spot.
+          </div>
+        </div>
+
+        <!-- 4. Photo Upload -->
+        <div class="form-group">
+          <label class="form-label">
+            6. Animal Photo (Highly recommended)
+          </label>
+
+          <div class="upload-box" id="photo-upload-box">
+            <input type="file" id="photo-file-input" accept="image/*" capture="environment" style="display: none;">
+            <div class="upload-icon">📷</div>
+            <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 0.2rem;">
+              Take a photo or choose an image file
+            </div>
+            <div style="font-size: 0.82rem; color: var(--text-muted);">
+              A photo helps responders evaluate medical severity and prepare proper equipment.
+            </div>
+          </div>
+
+          <!-- Preview & Controls -->
+          <div id="photo-preview-wrap" style="display: none; align-items: center; gap: 1rem; margin-top: 0.75rem; padding: 0.75rem; background: var(--bg-page); border-radius: var(--radius-sm); border: 1px solid var(--border-light);">
+            <img src="" id="photo-preview-img" style="width: 64px; height: 64px; object-fit: cover; border-radius: var(--radius-xs);" alt="Selected Photo">
+            <div style="flex: 1;">
+              <div style="font-size: 0.88rem; font-weight: 600;" id="photo-name-label">Photo selected</div>
+              <div style="font-size: 0.78rem; color: var(--text-muted);">Ready to upload to dispatch</div>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="clearPhotoAttachment()">Remove</button>
+          </div>
+        </div>
+
+        <!-- 5. Additional Notes -->
+        <div class="form-group">
+          <label class="form-label" for="incident-notes">
+            7. Specific Scene Notes & Condition
+          </label>
+          <textarea class="form-control" id="incident-notes" placeholder="Describe the scene: e.g. Dog is hiding under a parked truck, unable to walk, bleeding from front paw. People nearby are giving shade."></textarea>
+        </div>
+
+        <!-- 6. Reporter Contact -->
+        <div class="form-group">
+          <label class="form-label">
+            8. Your Contact Details <span class="req">*</span>
+          </label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 0.5rem;">
+            <div>
+              <input type="text" class="form-control" id="reporter-name" placeholder="Your Full Name" required>
+            </div>
+            <div>
+              <input type="tel" class="form-control" id="reporter-phone" placeholder="Phone Number (e.g. +1 555-0123)" required>
+            </div>
+          </div>
+          <div class="form-hint" style="font-size: 0.82rem; color: var(--text-muted);">
+            🔒 <strong>Privacy Notice:</strong> Your phone number is only shared with verified responders assigned to this case so they can call for directions upon arriving. It is never displayed publicly.
+          </div>
+        </div>
+
+        <!-- Submit Button -->
+        <div style="margin-top: 2rem;">
+          <button type="submit" class="btn btn-emergency btn-block btn-lg" id="btn-submit-report">
+            <span>Submit Animal Report</span>
+          </button>
+        </div>
+
+      </form>
+    </div>
+
+    <!-- CONFIRMATION SCREEN (Shown immediately on submit) -->
+    <div id="report-confirmation-container" style="display: none;">
+      <div class="form-card" style="text-align: center; padding: 3rem 2rem;">
+        
+        <div style="width: 56px; height: 56px; border-radius: var(--radius-full); background: var(--status-green-bg); color: var(--status-green-text); border: 2px solid var(--status-green-border); display: flex; align-items: center; justify-content: center; font-size: 1.8rem; margin: 0 auto 1.25rem;">
+          ✓
+        </div>
+
+        <h2 style="font-size: 1.85rem; color: var(--text-main); margin-bottom: 0.5rem;">
+          Report Received Successfully
+        </h2>
+
+        <p style="color: var(--text-secondary); max-width: 540px; margin: 0 auto 2rem; font-size: 1rem;">
+          Your report has been logged and dispatched to registered volunteers and rescue groups in your area.
+        </p>
+
+        <!-- Summary Box -->
+        <div style="background: var(--bg-subtle); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 1.5rem; max-width: 500px; margin: 0 auto 2rem; text-align: left;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-light); padding-bottom: 0.75rem;">
+            <div>
+              <div style="font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase;">Reference Code</div>
+              <div style="font-family: var(--font-mono); font-size: 1.2rem; font-weight: 800; color: var(--brand-primary);" id="conf-case-id">
+                PAW-0000
+              </div>
+            </div>
+            <div>
+              <span class="badge badge-urgent" id="conf-status-badge">Reported</span>
+            </div>
+          </div>
+
+          <div style="font-size: 0.9rem; display: flex; flex-direction: column; gap: 0.6rem; color: var(--text-secondary);">
+            <div><strong>Animal:</strong> <span id="conf-animal-text">Dog</span></div>
+            <div><strong>Reported Location:</strong> <span id="conf-location-text">Ajmer Road, Jaipur</span></div>
+            <div><strong>Time Logged:</strong> <span id="conf-time-text">Just now</span></div>
+          </div>
+        </div>
+
+        <!-- Helpful next steps -->
+        <div style="background: var(--brand-primary-light); border: 1px solid var(--brand-primary-border); border-radius: var(--radius-md); padding: 1.25rem; max-width: 500px; margin: 0 auto 2rem; text-align: left;">
+          <h4 style="font-size: 0.95rem; color: var(--brand-primary); margin-bottom: 0.4rem;">What you can do right now:</h4>
+          <ul style="font-size: 0.88rem; color: var(--text-secondary); padding-left: 1.25rem; line-height: 1.5;">
+            <li>Keep the animal in sight from a safe distance so you can direct the responder.</li>
+            <li>Keep children and other pets away to prevent agitation.</li>
+            <li>Do not attempt to force water or food down the mouth of an animal in shock.</li>
+          </ul>
+        </div>
+
+        <!-- Action Links -->
+        <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+          <a href="case.html" id="conf-track-btn" class="btn btn-primary btn-lg">
+            <span>View & Track This Report →</span>
+          </a>
+          <a href="map.html" class="btn btn-secondary btn-lg">
+            <span>View Active Map</span>
+          </a>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="js/api.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/map-utils.js"></script>
+  <script src="js/ui.js"></script>
+
+  <script>
+    let reportMap = null;
+    let reportMarker = null;
+    let currentCoords = { lat: 26.8928, lng: 75.7485 };
+    let attachedPhotoData = null;
+    let attachedFile = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      restoreDraft();
+      setupDraftAutoSave();
+      initMapPicker();
+      setupLocationButton();
+      setupPhotoHandlers();
+      setupFormSubmission();
+    });
+
+    function setupDraftAutoSave() {
+      const fields = ['incident-notes', 'location-address', 'reporter-name', 'reporter-phone', 'animal-description'];
+      fields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.addEventListener('input', () => {
+            try {
+              const draft = {
+                notes: document.getElementById('incident-notes').value,
+                address: document.getElementById('location-address').value,
+                name: document.getElementById('reporter-name').value,
+                phone: document.getElementById('reporter-phone').value,
+                desc: document.getElementById('animal-description').value
+              };
+              sessionStorage.setItem('pawsos_report_draft', JSON.stringify(draft));
+            } catch (e) {}
+          });
+        }
+      });
+    }
+
+    function restoreDraft() {
+      try {
+        const saved = sessionStorage.getItem('pawsos_report_draft');
+        if (!saved) return;
+        const draft = JSON.parse(saved);
+        if (draft.notes) document.getElementById('incident-notes').value = draft.notes;
+        if (draft.address) document.getElementById('location-address').value = draft.address;
+        if (draft.name) document.getElementById('reporter-name').value = draft.name;
+        if (draft.phone) document.getElementById('reporter-phone').value = draft.phone;
+        if (draft.desc) document.getElementById('animal-description').value = draft.desc;
+      } catch (e) {}
+    }
+
+    function clearDraft() {
+      try { sessionStorage.removeItem('pawsos_report_draft'); } catch (e) {}
+    }
+
+    function initMapPicker() {
+      if (typeof L === 'undefined') return;
+
+      reportMap = L.map('location-picker-map', {
+        center: [currentCoords.lat, currentCoords.lng],
+        zoom: 14
+      });
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(reportMap);
+
+      const icon = window.pawMap.createIcon('urgent', '📍');
+      reportMarker = L.marker([currentCoords.lat, currentCoords.lng], {
+        draggable: true,
+        icon: icon
+      }).addTo(reportMap);
+
+      reportMarker.on('dragend', (e) => {
+        const pos = e.target.getLatLng();
+        setCoordinates(pos.lat, pos.lng);
+      });
+
+      reportMap.on('click', (e) => {
+        reportMarker.setLatLng(e.latlng);
+        setCoordinates(e.latlng.lat, e.latlng.lng);
+      });
+    }
+
+    function setCoordinates(lat, lng) {
+      currentCoords = { lat, lng };
+      const addr = document.getElementById('location-address');
+      if (addr && !addr.value.includes('Jaipur')) {
+        addr.value = `Selected Point (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+      }
+    }
+
+    function setupLocationButton() {
+      const btn = document.getElementById('btn-use-gps');
+      const statusInd = document.getElementById('gps-status-indicator');
+      if (!btn) return;
+
+      btn.addEventListener('click', () => {
+        btn.textContent = 'Acquiring GPS...';
+        btn.disabled = true;
+        statusInd.style.display = 'block';
+        statusInd.style.color = 'var(--text-muted)';
+        statusInd.textContent = 'Requesting browser location permission...';
+
+        window.pawMap.getCurrentLocation(
+          (pos) => {
+            btn.textContent = '✓ Location Locked';
+            btn.disabled = false;
+            statusInd.style.color = 'var(--status-green-text)';
+            statusInd.textContent = `Location captured within ~${Math.round(pos.accuracy || 15)}m accuracy.`;
+
+            currentCoords = { lat: pos.lat, lng: pos.lng };
+            if (reportMap && reportMarker) {
+              reportMap.setView([pos.lat, pos.lng], 16);
+              reportMarker.setLatLng([pos.lat, pos.lng]);
+            }
+            document.getElementById('location-address').value = `GPS Coordinates (${pos.lat.toFixed(4)}, ${pos.lng.toFixed(4)})`;
+            showToast('Current GPS coordinates detected!', 'success');
+          },
+          (errMsg) => {
+            btn.textContent = '📍 Use My Current Location';
+            btn.disabled = false;
+            statusInd.style.color = 'var(--emergency-red)';
+            statusInd.textContent = errMsg + ' You can click on the map to set the location.';
+            showToast(errMsg, 'error');
+          }
+        );
+      });
+    }
+
+    function setupPhotoHandlers() {
+      const box = document.getElementById('photo-upload-box');
+      const input = document.getElementById('photo-file-input');
+
+      if (box && input) {
+        box.addEventListener('click', () => input.click());
+
+        input.addEventListener('change', (e) => {
+          if (e.target.files && e.target.files[0]) {
+            handleSelectedPhoto(e.target.files[0]);
+          }
+        });
+
+        box.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          box.classList.add('dragover');
+        });
+
+        box.addEventListener('dragleave', () => box.classList.remove('dragover'));
+
+        box.addEventListener('drop', (e) => {
+          e.preventDefault();
+          box.classList.remove('dragover');
+          if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            handleSelectedPhoto(e.dataTransfer.files[0]);
+          }
+        });
+      }
+    }
+
+    function handleSelectedPhoto(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        attachedPhotoData = e.target.result;
+        document.getElementById('photo-preview-img').src = attachedPhotoData;
+        document.getElementById('photo-name-label').textContent = file.name;
+        document.getElementById('photo-preview-wrap').style.display = 'flex';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearPhotoAttachment() {
+      attachedFile = null;
+      attachedPhotoData = null;
+      document.getElementById('photo-file-input').value = '';
+      document.getElementById('photo-preview-wrap').style.display = 'none';
+      document.getElementById('photo-preview-img').src = '';
+    }
+
+    function setupFormSubmission() {
+      const form = document.getElementById('animal-report-form');
+      if (!form) return;
+
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+
+        const incidentSelect = document.getElementById('incident-type');
+        const errHint = document.getElementById('incident-error');
+
+        if (!incidentSelect.value) {
+          errHint.style.display = 'block';
+          incidentSelect.focus();
+          return;
+        }
+        errHint.style.display = 'none';
+
+        const urgency = document.querySelector('input[name="urgencyLevel"]:checked').value;
+        const species = document.querySelector('input[name="animalSpecies"]:checked').value;
+        const description = document.getElementById('animal-description').value.trim();
+        const address = document.getElementById('location-address').value.trim();
+        const notes = document.getElementById('incident-notes').value.trim();
+        const reporterName = document.getElementById('reporter-name').value.trim();
+        const reporterPhone = document.getElementById('reporter-phone').value.trim();
+
+        if (!reporterPhone) {
+          showToast('Please provide a phone number for responder coordination.', 'error');
+          document.getElementById('reporter-phone').focus();
+          return;
+        }
+
+        const btn = document.getElementById('btn-submit-report');
+        btn.disabled = true;
+        btn.textContent = 'Submitting report to dispatch...';
+
+        const photoFileInput = document.getElementById('photo-file-input');
+        const photoFile = (photoFileInput && photoFileInput.files && photoFileInput.files[0]) ? photoFileInput.files[0] : null;
+
+        try {
+          // Save report into database via store
+          const createdCase = await window.pawStore.createReport({
+            animalType: species,
+            animalName: description || `${species.charAt(0).toUpperCase() + species.slice(1)} in distress`,
+            urgency: urgency,
+            condition: incidentSelect.value,
+            description: notes,
+            address: address,
+            area: address.split(',')[0],
+            city: 'Metropolis',
+            lat: currentCoords.lat,
+            lng: currentCoords.lng,
+            photo: attachedPhotoData,
+            reporterName: reporterName || 'Community Citizen',
+            reporterPhone: reporterPhone
+          }, photoFile);
+
+          // Show Confirmation Screen
+          clearDraft();
+          document.getElementById('report-form-container').style.display = 'none';
+          const confContainer = document.getElementById('report-confirmation-container');
+          confContainer.style.display = 'block';
+
+          document.getElementById('conf-case-id').textContent = createdCase.id;
+          document.getElementById('conf-animal-text').textContent = createdCase.animalName;
+          document.getElementById('conf-location-text').textContent = (createdCase.location && createdCase.location.address) ? createdCase.location.address : address;
+          document.getElementById('conf-track-btn').href = `case.html?id=${createdCase.id}`;
+
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          showToast(`Report #${createdCase.id} registered in database!`, 'success');
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = '🚨 Submit Emergency Report';
+          showToast('Failed to submit: ' + (err.message || 'Server error'), 'error');
+        }
+      });
+    }
+  </script>
+</body>
+</html>

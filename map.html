@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Active Animal Reports Map — PawSOS</title>
+  <meta name="description" content="Interactive map of active animal emergency reports and local rescue operations.">
+  
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+  <style>
+    .map-split-view {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      height: calc(100vh - 105px);
+      position: relative;
+    }
+
+    #community-map {
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    .map-sidebar {
+      background: var(--bg-surface);
+      border-left: 1px solid var(--border-light);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      z-index: 10;
+      overflow: hidden;
+    }
+
+    .map-sidebar-head {
+      padding: 1.25rem 1.25rem 1rem;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .map-filter-group {
+      display: flex;
+      gap: 0.4rem;
+      margin-top: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .map-filter-chip {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-light);
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 0.35rem 0.65rem;
+      border-radius: var(--radius-xs);
+      cursor: pointer;
+      color: var(--text-secondary);
+      transition: all var(--transition-fast);
+    }
+
+    .map-filter-chip.active {
+      background: var(--brand-primary);
+      color: white;
+      border-color: var(--brand-primary);
+    }
+
+    .map-sidebar-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+
+    .map-case-item {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      padding: 0.85rem;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .map-case-item:hover, .map-case-item.focused {
+      border-color: var(--brand-primary);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .map-float-tool {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      z-index: 999;
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    @media (max-width: 860px) {
+      .map-split-view {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+      #community-map {
+        height: 420px;
+      }
+      .map-sidebar {
+        height: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Placeholder (ui.js) -->
+  <div id="navbar-mount"></div>
+
+  <main class="map-split-view">
+    <!-- Map Canvas -->
+    <div style="position: relative; width: 100%; height: 100%;">
+      <div id="community-map"></div>
+
+      <!-- Floating Map Helper -->
+      <div class="map-float-tool">
+        <button class="btn btn-secondary btn-sm" onclick="centerOnUserLocation()">
+          <span>🎯 My Location</span>
+        </button>
+        <a href="report.html" class="btn btn-emergency btn-sm">
+          <span>+ Report Animal</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Map Sidebar -->
+    <aside class="map-sidebar">
+      <div class="map-sidebar-head">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h2 style="font-size: 1.15rem; margin: 0;">Active Area Reports</h2>
+          <span style="font-size: 0.8rem; color: var(--text-muted);" id="map-total-indicator">0 cases</span>
+        </div>
+
+        <div class="map-filter-group">
+          <button class="map-filter-chip active" data-filter="all" onclick="setMapFilter('all')">All</button>
+          <button class="map-filter-chip" data-filter="critical" onclick="setMapFilter('critical')">🔴 Critical</button>
+          <button class="map-filter-chip" data-filter="urgent" onclick="setMapFilter('urgent')">🟠 Urgent</button>
+          <button class="map-filter-chip" data-filter="resolved" onclick="setMapFilter('resolved')">🟢 Resolved</button>
+        </div>
+      </div>
+
+      <!-- Scrollable List of Cases -->
+      <div class="map-sidebar-scroll" id="map-cases-scroll">
+        <!-- Rendered dynamically -->
+      </div>
+    </aside>
+  </main>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="js/api.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/map-utils.js"></script>
+  <script src="js/ui.js"></script>
+
+  <script>
+    let commMap = null;
+    let markersLayer = null;
+    let activeFilter = 'all';
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initMap();
+      renderMapData();
+
+      if (window.pawStore) {
+        window.pawStore.subscribe(() => {
+          renderMapData();
+        });
+      }
+    });
+
+    function initMap() {
+      if (typeof L === 'undefined') return;
+
+      commMap = L.map('community-map', {
+        center: [26.8928, 75.7873],
+        zoom: 13
+      });
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(commMap);
+
+      markersLayer = L.layerGroup().addTo(commMap);
+    }
+
+    function setMapFilter(filter) {
+      activeFilter = filter;
+      document.querySelectorAll('.map-filter-chip').forEach(c => {
+        if (c.getAttribute('data-filter') === filter) c.classList.add('active');
+        else c.classList.remove('active');
+      });
+      renderMapData();
+    }
+
+    function renderMapData() {
+      if (!window.pawStore || !markersLayer) return;
+
+      markersLayer.clearLayers();
+      const scrollEl = document.getElementById('map-cases-scroll');
+      const totalIndicator = document.getElementById('map-total-indicator');
+
+      const allCases = window.pawStore.getAllCases();
+      const filtered = allCases.filter(c => {
+        if (activeFilter === 'all') return true;
+        if (activeFilter === 'critical') return c.urgency === 'critical';
+        if (activeFilter === 'urgent') return c.urgency === 'urgent';
+        if (activeFilter === 'resolved') return c.status === 'resolved';
+        return true;
+      });
+
+      totalIndicator.textContent = `${filtered.length} shown`;
+
+      if (filtered.length === 0) {
+        scrollEl.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 2rem; font-size: 0.9rem;">No cases matching this filter.</div>';
+        return;
+      }
+
+      scrollEl.innerHTML = filtered.map(c => {
+        const lat = c.location ? c.location.lat : 26.8928;
+        const lng = c.location ? c.location.lng : 75.7873;
+        const iconUrgency = c.status === 'resolved' ? 'resolved' : c.urgency;
+
+        // Leaflet Marker
+        const icon = window.pawMap.createIcon(iconUrgency, '🐾');
+        const marker = L.marker([lat, lng], { icon }).addTo(markersLayer);
+
+        marker.bindPopup(`
+          <div style="width: 220px; padding: 0.75rem;">
+            <img src="${c.photo || 'assets/dog-sample.jpg'}" style="width: 100%; height: 95px; object-fit: cover; border-radius: 4px; margin-bottom: 0.5rem;" onerror="this.src='assets/dog-sample.jpg'">
+            <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 0.2rem;">#${c.id} — ${c.animalName}</div>
+            <div style="font-size: 0.8rem; color: #475569; margin-bottom: 0.6rem;">${c.condition}</div>
+            <a href="case.html?id=${c.id}" class="btn btn-secondary btn-sm btn-block">Track Case Status →</a>
+          </div>
+        `);
+
+        return `
+          <div class="map-case-item" onclick="focusCase(${lat}, ${lng}, '${c.id}')" id="case-item-${c.id}">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+              <strong style="font-size: 0.88rem; font-family: var(--font-mono); color: var(--brand-primary);">${c.id}</strong>
+              <span class="badge ${c.urgency === 'critical' ? 'badge-emergency' : (c.urgency === 'urgent' ? 'badge-urgent' : 'badge-neutral')}">${c.urgency}</span>
+            </div>
+
+            <div style="font-weight: 600; font-size: 0.92rem; margin-bottom: 0.2rem;">
+              ${c.animalName}
+            </div>
+
+            <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0; margin-bottom: 0.4rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+              ${c.condition}
+            </p>
+
+            <div style="font-size: 0.75rem; color: var(--text-muted); display: flex; justify-content: space-between;">
+              <span>📍 ${c.location ? c.location.area || c.location.city : 'Jaipur'}</span>
+              <a href="case.html?id=${c.id}" style="font-weight: 600;">Details →</a>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function focusCase(lat, lng, caseId) {
+      if (commMap) {
+        commMap.setView([lat, lng], 15, { animate: true });
+      }
+      document.querySelectorAll('.map-case-item').forEach(el => el.classList.remove('focused'));
+      const activeEl = document.getElementById(`case-item-${caseId}`);
+      if (activeEl) activeEl.classList.add('focused');
+    }
+
+    function centerOnUserLocation() {
+      window.pawMap.getCurrentLocation(
+        (pos) => {
+          if (commMap) {
+            commMap.setView([pos.lat, pos.lng], 15);
+            const userIcon = window.pawMap.createIcon('rescuer', '📍');
+            L.marker([pos.lat, pos.lng], { icon: userIcon }).addTo(commMap)
+              .bindPopup('<b>Your Current Location</b>')
+              .openPopup();
+          }
+          showToast('Centered on your current position', 'success');
+        },
+        (errMsg) => {
+          showToast(errMsg, 'error');
+        }
+      );
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Incident Registry & Case Records — PawSOS</title>
+  <meta name="description" content="Central incident log and dispatch records for animal rescue organizations and shelter administrators.">
+  
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+</head>
+<body>
+
+  <!-- Top Navigation Placeholder (ui.js) -->
+  <div id="navbar-mount"></div>
+
+  <main class="container" style="padding-top: 2.5rem; padding-bottom: 5rem;">
+
+    <!-- Top Registry Header -->
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
+      <div>
+        <h1 style="font-size: 2rem; margin-bottom: 0.25rem;">Incident Registry & Dispatch Records</h1>
+        <p style="color: var(--text-secondary); margin: 0; font-size: 0.95rem;">
+          Official community log of animal emergencies, volunteer dispatches, and resolutions.
+        </p>
+      </div>
+
+      <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+        <button class="btn btn-secondary btn-sm" onclick="exportDataCSV()">
+          <span>📥 Export Incident Log (CSV)</span>
+        </button>
+        <a href="report.html" class="btn btn-emergency btn-sm">
+          <span>+ Log Incident</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Real Status Summary Row -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+      <div class="card" style="padding: 1.25rem;">
+        <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">Total Incidents Logged</div>
+        <div style="font-size: 1.8rem; font-weight: 800; font-family: var(--font-mono); color: var(--text-main);" id="reg-stat-total">0</div>
+        <div style="font-size: 0.78rem; color: var(--text-muted);">In local system database</div>
+      </div>
+
+      <div class="card" style="padding: 1.25rem; border-left: 4px solid var(--urgency-amber);">
+        <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">Active Dispatches</div>
+        <div style="font-size: 1.8rem; font-weight: 800; font-family: var(--font-mono); color: var(--urgency-amber);" id="reg-stat-active">0</div>
+        <div style="font-size: 0.78rem; color: var(--urgency-amber);">Under active care / transport</div>
+      </div>
+
+      <div class="card" style="padding: 1.25rem; border-left: 4px solid var(--status-green);">
+        <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">Resolved Cases</div>
+        <div style="font-size: 1.8rem; font-weight: 800; font-family: var(--font-mono); color: var(--status-green);" id="reg-stat-resolved">0</div>
+        <div style="font-size: 0.78rem; color: var(--status-green);">Admitted to shelter / Treated</div>
+      </div>
+    </div>
+
+    <!-- Master Registry Table Card -->
+    <div class="card" style="padding: 1.5rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem;">
+        <div style="display: flex; gap: 0.5rem; flex: 1; max-width: 400px;">
+          <input type="text" id="registry-search-input" class="form-control" style="font-size: 0.88rem; padding: 0.5rem 0.85rem;" placeholder="Search ID, species, or address..." oninput="filterRegistryTable()">
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <label for="registry-status-filter" style="font-size: 0.82rem; color: var(--text-muted);">Filter:</label>
+          <select id="registry-status-filter" class="form-control" style="width: auto; font-size: 0.85rem; padding: 0.5rem 0.75rem;" onchange="filterRegistryTable()">
+            <option value="all">All Statuses</option>
+            <option value="reported">Reported</option>
+            <option value="assigned">Assigned</option>
+            <option value="in_progress">In Progress</option>
+            <option value="resolved">Resolved</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x: auto; border: 1px solid var(--border-light); border-radius: var(--radius-sm);">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Animal</th>
+              <th>Reported Problem</th>
+              <th>Location</th>
+              <th>Urgency</th>
+              <th>Status</th>
+              <th>Assigned Responder</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="registry-table-body">
+            <!-- Rendered dynamically -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="js/api.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/map-utils.js"></script>
+  <script src="js/ui.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      renderRegistry();
+
+      if (window.pawStore) {
+        window.pawStore.subscribe(() => {
+          renderRegistry();
+        });
+      }
+    });
+
+    function renderRegistry() {
+      if (!window.pawStore) return;
+      const stats = window.pawStore.getStats();
+
+      document.getElementById('reg-stat-total').textContent = stats.total;
+      document.getElementById('reg-stat-active').textContent = stats.active;
+      document.getElementById('reg-stat-resolved').textContent = stats.resolved;
+
+      filterRegistryTable();
+    }
+
+    function filterRegistryTable() {
+      const search = (document.getElementById('registry-search-input').value || '').toLowerCase().trim();
+      const statusFilter = document.getElementById('registry-status-filter').value;
+      const tbody = document.getElementById('registry-table-body');
+
+      const cases = window.pawStore.getAllCases();
+      const filtered = cases.filter(c => {
+        const matchesSearch = !search ||
+          c.id.toLowerCase().includes(search) ||
+          c.animalName.toLowerCase().includes(search) ||
+          c.condition.toLowerCase().includes(search) ||
+          (c.location && c.location.address.toLowerCase().includes(search));
+
+        const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
+        return matchesSearch && matchesStatus;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-muted);">No records found.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(c => `
+        <tr>
+          <td style="font-family: var(--font-mono); font-weight: 700; color: var(--brand-primary);">${c.id}</td>
+          <td>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <img src="${c.photo || 'assets/dog-sample.jpg'}" style="width: 28px; height: 28px; border-radius: 4px; object-fit: cover;" onerror="this.src='assets/dog-sample.jpg'">
+              <span>${c.animalName}</span>
+            </div>
+          </td>
+          <td style="max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${c.condition}">${c.condition}</td>
+          <td style="font-size: 0.85rem; color: var(--text-secondary);">${c.location ? c.location.area || c.location.city : 'Jaipur'}</td>
+          <td>
+            <span class="badge ${c.urgency === 'critical' ? 'badge-emergency' : (c.urgency === 'urgent' ? 'badge-urgent' : 'badge-neutral')}">${c.urgency}</span>
+          </td>
+          <td>
+            <span class="badge ${c.status === 'resolved' ? 'badge-resolved' : 'badge-neutral'}">${c.status.replace('_', ' ')}</span>
+          </td>
+          <td style="font-size: 0.85rem;">
+            ${c.responder ? `<strong>${c.responder.name}</strong>` : '<span style="color: var(--text-muted);">Unassigned</span>'}
+          </td>
+          <td>
+            <a href="case.html?id=${c.id}" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.78rem;">
+              View Record →
+            </a>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function exportDataCSV() {
+      if (window.pawAPI && window.pawAPI.isAdmin()) {
+        try {
+          const res = await fetch(window.pawAPI.getExportUrl(), {
+            headers: { 'Authorization': `Bearer ${window.pawAPI.getToken()}` }
+          });
+          if (res.ok) {
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `pawsos_server_export_${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            showToast('Database verified CSV exported', 'success');
+            return;
+          }
+        } catch (e) {}
+      }
+
+      const cases = window.pawStore.getAllCases();
+      let csv = 'Case ID,Animal Name,Species,Urgency,Status,Location,Reported Condition,Time Logged\n';
+
+      cases.forEach(c => {
+        csv += `"${c.id}","${c.animalName}","${c.animalType}","${c.urgency}","${c.status}","${(c.location ? c.location.address : '').replace(/"/g, '""')}","${(c.condition || '').replace(/"/g, '""')}","${c.createdAt}"\n`;
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.setAttribute('href', url);
+      a.setAttribute('download', `pawsos_incident_log_${new Date().toISOString().slice(0, 10)}.csv`);
+      a.click();
+      showToast('Incident records CSV exported', 'success');
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Responder Portal — PawSOS Volunteer Operations</title>
+  <meta name="description" content="Operational portal for animal welfare volunteers and rescue groups to review incoming reports, accept dispatches, and coordinate treatment.">
+  
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+  <style>
+    .portal-tabs {
+      display: flex;
+      gap: 0.5rem;
+      border-bottom: 1px solid var(--border-light);
+      margin-bottom: 1.5rem;
+      overflow-x: auto;
+    }
+
+    .portal-tab-btn {
+      background: transparent;
+      border: none;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      padding: 0.65rem 1rem;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      white-space: nowrap;
+    }
+
+    .portal-tab-btn:hover {
+      color: var(--text-main);
+    }
+
+    .portal-tab-btn.active {
+      color: var(--brand-primary);
+      border-bottom-color: var(--brand-primary);
+    }
+
+    .tab-counter {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-light);
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: var(--radius-full);
+      color: var(--text-secondary);
+    }
+
+    .portal-tab-btn.active .tab-counter {
+      background: var(--brand-primary-light);
+      border-color: var(--brand-primary-border);
+      color: var(--brand-primary);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Placeholder (ui.js) -->
+  <div id="navbar-mount"></div>
+
+  <main class="container" style="padding-top: 2.5rem; padding-bottom: 5rem;">
+
+    <!-- Responder Profile & Status Header -->
+    <div class="card" style="margin-bottom: 2rem; background: var(--bg-surface); border-left: 4px solid var(--brand-primary);">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+            <div style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--brand-primary);">
+              Volunteer Responder Operations
+            </div>
+            <div id="user-auth-badge"></div>
+          </div>
+          <h1 style="font-size: 1.65rem; margin: 0; margin-bottom: 0.25rem;" id="user-profile-name">
+            Responder Portal
+          </h1>
+          <p style="font-size: 0.88rem; color: var(--text-secondary); margin: 0;" id="user-profile-org">
+            Checking session...
+          </p>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+          <div id="user-auth-action"></div>
+          <a href="admin.html" class="btn btn-secondary btn-sm" id="btn-admin-registry" style="display: none;">
+            <span>📋 Registry</span>
+          </a>
+          <a href="map.html" class="btn btn-secondary btn-sm">
+            <span>🗺️ Area Map</span>
+          </a>
+          <a href="report.html" class="btn btn-emergency btn-sm">
+            <span>+ Log Direct Case</span>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Status Filter Tabs -->
+    <div class="portal-tabs">
+      <button class="portal-tab-btn active" data-tab="pending" onclick="switchPortalTab('pending')">
+        <span>Pending Response</span>
+        <span class="tab-counter" id="cnt-pending">0</span>
+      </button>
+
+      <button class="portal-tab-btn" data-tab="active" onclick="switchPortalTab('active')">
+        <span>Active Dispatches</span>
+        <span class="tab-counter" id="cnt-active">0</span>
+      </button>
+
+      <button class="portal-tab-btn" data-tab="resolved" onclick="switchPortalTab('resolved')">
+        <span>Resolved Rescues</span>
+        <span class="tab-counter" id="cnt-resolved">0</span>
+      </button>
+
+      <button class="portal-tab-btn" data-tab="all" onclick="switchPortalTab('all')">
+        <span>All Cases</span>
+        <span class="tab-counter" id="cnt-all">0</span>
+      </button>
+    </div>
+
+    <!-- Filter & Search Toolbar -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem;">
+      <div style="display: flex; gap: 0.5rem; flex: 1; max-width: 400px;">
+        <input type="text" class="form-control" id="search-cases-input" placeholder="Search case ID, animal, or locality..." oninput="renderPortalFeed()">
+      </div>
+
+      <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <label for="filter-urgency-select" style="font-size: 0.85rem; color: var(--text-muted);">Urgency:</label>
+        <select class="form-control" id="filter-urgency-select" style="width: auto; padding: 0.45rem 0.75rem; font-size: 0.85rem;" onchange="renderPortalFeed()">
+          <option value="all">All Urgencies</option>
+          <option value="critical">Critical Only</option>
+          <option value="urgent">Urgent Only</option>
+          <option value="moderate">Moderate Only</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Cases Feed List -->
+    <div class="cases-grid" id="portal-feed-grid">
+      <!-- Rendered dynamically -->
+    </div>
+
+  </main>
+
+  <!-- Accept Dispatch Modal -->
+  <div id="portal-accept-modal" style="display: none; position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.6); align-items: center; justify-content: center; padding: 1.5rem;">
+    <div class="card" style="max-width: 460px; width: 100%;">
+      <h3 style="font-size: 1.25rem; margin-bottom: 0.5rem;">Accept Rescue Case</h3>
+      <div id="modal-case-summary" style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 1.25rem;"></div>
+
+      <div class="form-group">
+        <label class="form-label">Estimated Arrival Time (ETA)</label>
+        <select class="form-control" id="modal-eta-select">
+          <option value="~10 mins">~10 Minutes (Nearby)</option>
+          <option value="~20 mins" selected>~20 Minutes (In Transit)</option>
+          <option value="~35 mins">~35 Minutes (Arranging Vehicle)</option>
+          <option value="On Scene">Already On Scene</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Vehicle / Equipment</label>
+        <input type="text" class="form-control" id="modal-vehicle-input" value="Two-Wheeler Rescue Kit & Muzzle">
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+        <button class="btn btn-secondary btn-sm" onclick="closePortalAcceptModal()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="confirmPortalAccept()">Confirm Dispatch</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="js/api.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/map-utils.js"></script>
+  <script src="js/ui.js"></script>
+
+  <script>
+    let activePortalTab = 'pending';
+    let targetCaseIdForAccept = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      renderUserProfile();
+      renderPortalFeed();
+
+      if (window.pawStore) {
+        window.pawStore.subscribe(() => {
+          renderUserProfile();
+          renderPortalFeed();
+        });
+      }
+    });
+
+    function renderUserProfile() {
+      const user = (window.pawAPI && window.pawAPI.getCurrentUser()) || (window.pawStore && window.pawStore.activeUser);
+      const nameEl = document.getElementById('user-profile-name');
+      const orgEl = document.getElementById('user-profile-org');
+      const authBadgeEl = document.getElementById('user-auth-badge');
+      const loginBtnWrap = document.getElementById('user-auth-action');
+      const adminBtn = document.getElementById('btn-admin-registry');
+
+      if (window.pawAPI && window.pawAPI.isAuthenticated() && user) {
+        if (nameEl) nameEl.textContent = `Welcome, ${user.name}`;
+        if (orgEl) orgEl.textContent = `${user.organization || 'PawSOS Response Network'} • Logged in as ${user.role.toUpperCase()}`;
+        if (authBadgeEl) authBadgeEl.innerHTML = `<span class="badge badge-resolved">✓ Authenticated</span>`;
+        if (loginBtnWrap) {
+          loginBtnWrap.innerHTML = `
+            <button class="btn btn-secondary btn-sm" onclick="handleLogout()">Sign Out</button>
+          `;
+        }
+        if (adminBtn && user.role === 'admin') {
+          adminBtn.style.display = 'inline-flex';
+        }
+      } else {
+        if (nameEl) nameEl.textContent = 'Volunteer Responder Portal';
+        if (orgEl) orgEl.textContent = 'Guest preview mode. Sign in with responder credentials to accept dispatches and coordinate rescues.';
+        if (authBadgeEl) authBadgeEl.innerHTML = `<span class="badge badge-urgent">Guest Mode</span>`;
+        if (loginBtnWrap) {
+          loginBtnWrap.innerHTML = `
+            <a href="login.html" class="btn btn-primary btn-sm">Sign In as Responder</a>
+          `;
+        }
+        if (adminBtn) adminBtn.style.display = 'none';
+      }
+    }
+
+    function handleLogout() {
+      if (window.pawAPI) window.pawAPI.logout();
+      if (window.pawStore) window.pawStore.setActiveUser(null);
+      showToast('Logged out of Responder Portal.', 'info');
+      setTimeout(() => window.location.reload(), 400);
+    }
+
+    function switchPortalTab(tab) {
+      activePortalTab = tab;
+      document.querySelectorAll('.portal-tab-btn').forEach(btn => {
+        if (btn.getAttribute('data-tab') === tab) btn.classList.add('active');
+        else btn.classList.remove('active');
+      });
+      renderPortalFeed();
+    }
+
+    function renderPortalFeed() {
+      if (!window.pawStore) return;
+
+      const cases = window.pawStore.getAllCases();
+      const search = (document.getElementById('search-cases-input').value || '').toLowerCase().trim();
+      const urgencyFilter = document.getElementById('filter-urgency-select').value;
+
+      // Update counters
+      const pendingList = cases.filter(c => c.status === 'reported');
+      const activeList = cases.filter(c => c.status === 'assigned' || c.status === 'in_progress');
+      const resolvedList = cases.filter(c => c.status === 'resolved');
+
+      document.getElementById('cnt-pending').textContent = pendingList.length;
+      document.getElementById('cnt-active').textContent = activeList.length;
+      document.getElementById('cnt-resolved').textContent = resolvedList.length;
+      document.getElementById('cnt-all').textContent = cases.length;
+
+      let filtered = [];
+      if (activePortalTab === 'pending') filtered = pendingList;
+      else if (activePortalTab === 'active') filtered = activeList;
+      else if (activePortalTab === 'resolved') filtered = resolvedList;
+      else filtered = cases;
+
+      // Search & Urgency filtering
+      filtered = filtered.filter(c => {
+        const matchesSearch = !search ||
+          c.id.toLowerCase().includes(search) ||
+          c.animalName.toLowerCase().includes(search) ||
+          c.condition.toLowerCase().includes(search) ||
+          (c.location && c.location.address.toLowerCase().includes(search));
+
+        const matchesUrgency = urgencyFilter === 'all' || c.urgency === urgencyFilter;
+        return matchesSearch && matchesUrgency;
+      });
+
+      const grid = document.getElementById('portal-feed-grid');
+      if (!grid) return;
+
+      if (filtered.length === 0) {
+        grid.innerHTML = `
+          <div class="card" style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">
+            <div style="font-size: 1.8rem; margin-bottom: 0.5rem;">✓</div>
+            <h3 style="font-size: 1.15rem; color: var(--text-main); margin-bottom: 0.25rem;">No cases in this queue</h3>
+            <p style="font-size: 0.9rem; margin: 0;">No reported animals are currently matching this filter.</p>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = filtered.map(c => {
+        let badgeClass = 'badge-neutral';
+        if (c.urgency === 'critical') badgeClass = 'badge-emergency';
+        else if (c.urgency === 'urgent') badgeClass = 'badge-urgent';
+
+        const isUnassigned = c.status === 'reported';
+
+        return `
+          <div class="case-card">
+            <div class="case-card-thumb">
+              <img src="${c.photo || 'assets/dog-sample.jpg'}" alt="${c.animalName}" onerror="this.src='assets/dog-sample.jpg'">
+              <div class="case-card-badges">
+                <span class="badge ${badgeClass}">${c.urgency}</span>
+                <span class="badge ${c.status === 'resolved' ? 'badge-resolved' : (c.status === 'reported' ? 'badge-neutral' : 'badge-urgent')}">
+                  ${c.status.replace('_', ' ')}
+                </span>
+              </div>
+            </div>
+
+            <div class="case-card-content">
+              <div class="case-meta-line">
+                <span style="font-family: var(--font-mono); font-weight: 700;">#${c.id}</span>
+                <span>•</span>
+                <span>${timeAgo(c.createdAt)}</span>
+              </div>
+
+              <h3 class="case-card-title">${c.animalName}</h3>
+              <p class="case-card-summary">${c.condition}</p>
+
+              <div class="case-location-row">
+                <span>📍</span>
+                <span>${c.location ? c.location.address : 'Jaipur, Rajasthan'}</span>
+              </div>
+
+              <div class="case-card-actions">
+                <a href="case.html?id=${c.id}" class="btn btn-secondary btn-sm" style="flex: 1;">
+                  Case Room
+                </a>
+
+                ${isUnassigned ? `
+                  <button class="btn btn-emergency btn-sm" onclick="openAcceptModal('${c.id}')">
+                    Accept Case
+                  </button>
+                ` : `
+                  <a href="case.html?id=${c.id}" class="btn btn-primary btn-sm">
+                    Manage →
+                  </a>
+                `}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function openAcceptModal(caseId) {
+      targetCaseIdForAccept = caseId;
+      const c = window.pawStore.getCaseById(caseId);
+      if (!c) return;
+
+      document.getElementById('modal-case-summary').innerHTML = `
+        <strong>${c.id} — ${c.animalName}</strong><br>
+        <span style="color: var(--emergency-red);">${c.condition}</span><br>
+        <span>📍 ${c.location.address}</span>
+      `;
+      document.getElementById('portal-accept-modal').style.display = 'flex';
+    }
+
+    function closePortalAcceptModal() {
+      document.getElementById('portal-accept-modal').style.display = 'none';
+      targetCaseIdForAccept = null;
+    }
+
+    async function confirmPortalAccept() {
+      if (!targetCaseIdForAccept) return;
+      const eta = document.getElementById('modal-eta-select').value;
+      const vehicle = document.getElementById('modal-vehicle-input').value;
+
+      const user = (window.pawAPI && window.pawAPI.getCurrentUser()) || { name: 'Unit 4 - Sarah Jenkins', role: 'responder' };
+
+      await window.pawStore.assignResponder(targetCaseIdForAccept, {
+        name: user.name || 'Unit 4 Responder',
+        role: user.role || 'responder',
+        organization: user.organization || 'City Animal Rescue Taskforce',
+        phone: user.phone || '+1 555-0248',
+        vehicle: vehicle || 'Rescue Unit Vehicle',
+        etaText: eta
+      });
+
+      closePortalAcceptModal();
+      showToast(`Case #${targetCaseIdForAccept} assigned. Dispatch recorded!`, 'success');
+      renderPortalFeed();
+    }
+
+    function timeAgo(dateString) {
+      if (!dateString) return 'Recently';
+      const now = new Date();
+      const past = new Date(dateString);
+      const diffMinutes = Math.floor((now - past) / 60000);
+      if (diffMinutes < 1) return 'Just now';
+      if (diffMinutes < 60) return `${diffMinutes}m ago`;
+      const diffHours = Math.floor(diffMinutes / 60);
+      if (diffHours < 24) return `${diffHours}h ago`;
+      return `${Math.floor(diffHours / 24)}d ago`;
+    }
+  </script>
+</body>
+</html>

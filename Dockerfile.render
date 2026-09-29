@@ -1,0 +1,55 @@
+FROM golang:1.27-alpine AS builder
+
+WORKDIR /build
+
+RUN apk add --no-cache ca-certificates tzdata
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-s -w -extldflags '-static'" \
+    -o pawsos ./cmd/server
+
+FROM alpine:3.20
+
+WORKDIR /app
+
+RUN apk add --no-cache ca-certificates tzdata
+RUN addgroup -S pawsos && adduser -S pawsos -G pawsos
+
+COPY --from=builder /build/pawsos /app/pawsos
+COPY --from=builder /build/index.html /app/index.html
+COPY --from=builder /build/report.html /app/report.html
+COPY --from=builder /build/track.html /app/track.html
+COPY --from=builder /build/case.html /app/case.html
+COPY --from=builder /build/map.html /app/map.html
+COPY --from=builder /build/dashboard.html /app/dashboard.html
+COPY --from=builder /build/admin.html /app/admin.html
+COPY --from=builder /build/about.html /app/about.html
+COPY --from=builder /build/login.html /app/login.html
+COPY --from=builder /build/css /app/css
+COPY --from=builder /build/js /app/js
+COPY --from=builder /build/assets /app/assets
+COPY --from=builder /build/migrations /app/migrations
+
+RUN mkdir -p /app/uploads && chown -R pawsos:pawsos /app
+
+USER pawsos
+
+ENV PORT=8080 \
+    HOST=0.0.0.0 \
+    ENVIRONMENT=production \
+    DB_DRIVER=sqlite \
+    DB_SOURCE=/tmp/pawsos.db \
+    STORAGE_DIR=/tmp/uploads \
+    MAX_UPLOAD_SIZE_MB=5
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/health || exit 1
+
+ENTRYPOINT ["/app/pawsos"]

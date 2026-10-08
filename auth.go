@@ -59,7 +59,7 @@ func GenerateToken(user *models.User, secret string, duration time.Duration) (st
 // ValidateToken parses and validates a JWT token string
 func ValidateToken(tokenString, secret string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+		if t.Method != jwt.SigningMethodHS256 {
 			return nil, ErrInvalidToken
 		}
 		return []byte(secret), nil

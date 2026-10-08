@@ -4,10 +4,20 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Report an Animal in Need — PawSOS</title>
-  <meta name="description" content="Submit a report for an injured, sick, or trapped animal to alert nearby volunteer responders and animal welfare organizations.">
+  <meta name="description" content="Submit a report for an injured, sick, or trapped animal with its location and optional photo evidence.">
   
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <style>
+    .report-progress { display: grid; gap: .55rem; margin-bottom: 1.25rem; font-size: .9rem; font-weight: 650; color: var(--text-main); }
+    .report-progress-track { height: .45rem; overflow: hidden; border-radius: 1rem; background: var(--bg-subtle); }
+    #report-progress-fill { display: block; height: 100%; width: 14%; border-radius: inherit; background: var(--brand-primary); transition: width .15s ease; }
+    .report-step-heading { margin: 0 0 1.25rem; font-size: 1.05rem; }
+    .report-step-controls { display: flex; justify-content: space-between; gap: .75rem; align-items: center; margin-top: 1.25rem; }
+    .report-step-controls > .btn { min-height: 2.9rem; }
+    .report-step[hidden] { display: none; }
+    @media (prefers-reduced-motion: reduce) { #report-progress-fill { transition: none; } }
+  </style>
 </head>
 <body>
 
@@ -27,9 +37,9 @@
 
       <!-- Life-threatening emergency disclaimer -->
       <div style="background: #fffbeb; border: 1px solid #fef3c7; border-radius: var(--radius-sm); padding: 0.85rem 1.15rem; margin-bottom: 2rem; display: flex; align-items: flex-start; gap: 0.75rem;">
-        <span style="font-size: 1.25rem; color: #b45309; line-height: 1;">ℹ️</span>
+        <span style="font-size: 1.25rem; color: #b45309; line-height: 1;" aria-hidden="true">ℹ️</span>
         <div style="font-size: 0.88rem; color: #92400e;">
-          <strong>Immediate Life Threat:</strong> PawSOS is a community volunteer network. If an animal is suffering catastrophic arterial bleeding or severe traffic trauma and you can arrange immediate transport, consider taking them directly to the nearest animal hospital or dialing <a href="tel:1962" style="font-weight: 700; color: #92400e; text-decoration: underline;">1962</a>.
+        <strong>Immediate danger:</strong> PawSOS is a community reporting tool, not an emergency service. If you can do so safely, contact a local animal rescue or veterinary service directly as well.
         </div>
       </div>
 
@@ -150,7 +160,7 @@
         <!-- 3. Location -->
         <div class="form-group">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap; gap: 0.5rem;">
-            <label class="form-label" style="margin: 0;">
+            <label class="form-label" for="location-address" style="margin: 0;">
               5. Incident Location <span class="req">*</span>
             </label>
             <button type="button" class="btn btn-secondary btn-sm" id="btn-use-gps">
@@ -175,14 +185,18 @@
           </label>
 
           <div class="upload-box" id="photo-upload-box">
-            <input type="file" id="photo-file-input" accept="image/*" capture="environment" style="display: none;">
+            <input type="file" id="photo-file-input" accept="image/jpeg,image/png" style="display: none;">
             <div class="upload-icon">📷</div>
             <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 0.2rem;">
-              Take a photo or choose an image file
+              Choose the best proof of the animal's condition
             </div>
             <div style="font-size: 0.82rem; color: var(--text-muted);">
-              A photo helps responders evaluate medical severity and prepare proper equipment.
+              A photo can help responders prepare. PawSOS records upload metadata; it does not independently verify a photo.
             </div>
+          </div>
+          <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.75rem;">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-take-photo">📷 Take Photo</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-choose-photo">Choose Existing Photo</button>
           </div>
 
           <!-- Preview & Controls -->
@@ -190,7 +204,7 @@
             <img src="" id="photo-preview-img" style="width: 64px; height: 64px; object-fit: cover; border-radius: var(--radius-xs);" alt="Selected Photo">
             <div style="flex: 1;">
               <div style="font-size: 0.88rem; font-weight: 600;" id="photo-name-label">Photo selected</div>
-              <div style="font-size: 0.78rem; color: var(--text-muted);">Ready to upload to dispatch</div>
+              <div id="photo-evidence-indicator" style="font-size: 0.78rem; color: var(--text-muted);">Metadata will be recorded at upload.</div>
             </div>
             <button type="button" class="btn btn-secondary btn-sm" onclick="clearPhotoAttachment()">Remove</button>
           </div>
@@ -211,7 +225,7 @@
           </label>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 0.5rem;">
             <div>
-              <input type="text" class="form-control" id="reporter-name" placeholder="Your Full Name" required>
+              <input type="text" class="form-control" id="reporter-name" placeholder="Your Full Name" autocomplete="name" required>
             </div>
             <div>
               <input type="tel" class="form-control" id="reporter-phone" placeholder="Phone Number (e.g. +1 555-0123)" required>
@@ -227,6 +241,13 @@
           <button type="submit" class="btn btn-emergency btn-block btn-lg" id="btn-submit-report">
             <span>Submit Animal Report</span>
           </button>
+        </div>
+        <div id="duplicate-report-warning" role="alert" aria-live="assertive" hidden style="margin-top:1rem;padding:1rem;border:1px solid var(--status-amber-border);border-radius:var(--radius-sm);background:var(--status-amber-bg);">
+          <p style="margin:0 0 .75rem;">A similar animal report is already active nearby. Review it first; submit another report only if this is a different incident.</p>
+          <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
+            <a id="duplicate-report-link" class="btn btn-secondary btn-sm" href="#">Review existing report</a>
+            <button type="button" class="btn btn-secondary btn-sm" id="submit-distinct-report">This is a different incident</button>
+          </div>
         </div>
 
       </form>
@@ -245,7 +266,7 @@
         </h2>
 
         <p style="color: var(--text-secondary); max-width: 540px; margin: 0 auto 2rem; font-size: 1rem;">
-          Your report has been logged and dispatched to registered volunteers and rescue groups in your area.
+          Your report is saved. You can track its recorded status and share the reference with someone nearby who can help.
         </p>
 
         <!-- Summary Box -->
@@ -264,7 +285,7 @@
 
           <div style="font-size: 0.9rem; display: flex; flex-direction: column; gap: 0.6rem; color: var(--text-secondary);">
             <div><strong>Animal:</strong> <span id="conf-animal-text">Dog</span></div>
-            <div><strong>Reported Location:</strong> <span id="conf-location-text">Ajmer Road, Jaipur</span></div>
+            <div><strong>Reported Location:</strong> <span id="conf-location-text">Location recorded with report</span></div>
             <div><strong>Time Logged:</strong> <span id="conf-time-text">Just now</span></div>
           </div>
         </div>
@@ -305,9 +326,15 @@
   <script>
     let reportMap = null;
     let reportMarker = null;
-    let currentCoords = { lat: 26.8928, lng: 75.7485 };
+    let currentCoords = null;
+    let locationAccuracy = null;
+    let locationTimestamp = null;
+    let locationSource = '';
     let attachedPhotoData = null;
     let attachedFile = null;
+    let selectedPhotoSource = 'gallery';
+    let photoCapturedAt = null;
+    let photoLocationAtSelection = null;
 
     document.addEventListener('DOMContentLoaded', () => {
       restoreDraft();
@@ -315,8 +342,99 @@
       initMapPicker();
       setupLocationButton();
       setupPhotoHandlers();
+      setupReportSteps();
       setupFormSubmission();
     });
+
+    function setupReportSteps() {
+      const form = document.getElementById('animal-report-form');
+      const groups = Array.from(form.querySelectorAll(':scope > .form-group'));
+      const submitControls = document.getElementById('btn-submit-report').parentElement;
+      if (groups.length < 8) return;
+
+      const definitions = [
+        { title: 'What happened?', groups: [0] },
+        { title: 'How serious is it?', groups: [1] },
+        { title: 'What animal?', groups: [2, 3] },
+        { title: 'Where is the animal?', groups: [4] },
+        { title: 'Take a photo', groups: [5] },
+        { title: 'What should responders know?', groups: [6] },
+        { title: 'How can responders contact you?', groups: [7] }
+      ];
+      const progress = document.createElement('div');
+      progress.className = 'report-progress';
+      progress.setAttribute('role', 'status');
+      progress.setAttribute('aria-live', 'polite');
+      progress.innerHTML = '<span id="report-progress-label"></span><span class="report-progress-track"><span id="report-progress-fill"></span></span>';
+      form.insertBefore(progress, groups[0]);
+
+      const steps = definitions.map((definition, index) => {
+        const step = document.createElement('section');
+        step.className = 'report-step';
+        step.setAttribute('aria-labelledby', `report-step-title-${index + 1}`);
+        const heading = document.createElement('h2');
+        heading.id = `report-step-title-${index + 1}`;
+        heading.className = 'report-step-heading';
+        heading.textContent = `Step ${index + 1} of ${definitions.length} · ${definition.title}`;
+        step.appendChild(heading);
+        definition.groups.forEach(groupIndex => step.appendChild(groups[groupIndex]));
+        const controls = document.createElement('div');
+        controls.className = 'report-step-controls';
+        if (index > 0) {
+          const back = document.createElement('button');
+          back.type = 'button';
+          back.className = 'btn btn-secondary';
+          back.textContent = 'Back';
+          back.addEventListener('click', () => showReportStep(index - 1));
+          controls.appendChild(back);
+        }
+        if (index < definitions.length - 1) {
+          const next = document.createElement('button');
+          next.type = 'button';
+          next.className = 'btn btn-primary';
+          next.textContent = 'Continue';
+          next.addEventListener('click', () => {
+            if (!validateReportStep(step, index)) return;
+            showReportStep(index + 1);
+          });
+          controls.appendChild(next);
+        } else {
+          controls.appendChild(submitControls);
+        }
+        step.appendChild(controls);
+        form.appendChild(step);
+        return step;
+      });
+
+      function showReportStep(index) {
+        steps.forEach((step, stepIndex) => { step.hidden = stepIndex !== index; });
+        const label = document.getElementById('report-progress-label');
+        const fill = document.getElementById('report-progress-fill');
+        label.textContent = `Step ${index + 1} of ${steps.length}: ${definitions[index].title}`;
+        fill.style.width = `${((index + 1) / steps.length) * 100}%`;
+        if (index === 3 && reportMap) setTimeout(() => reportMap.invalidateSize(), 0);
+        steps[index].querySelector('input,select,textarea,button')?.focus({ preventScroll: true });
+      }
+
+      showReportStep(0);
+      window.showReportStep = showReportStep;
+    }
+
+    function validateReportStep(step, index) {
+      const required = step.querySelectorAll('[required]');
+      for (const field of required) {
+        if (!field.checkValidity()) {
+          field.reportValidity();
+          return false;
+        }
+      }
+      if (index === 3 && !currentCoords) {
+        showToast('Capture your location or place the pin on the map before continuing.', 'error');
+        document.getElementById('btn-use-gps').focus();
+        return false;
+      }
+      return true;
+    }
 
     function setupDraftAutoSave() {
       const fields = ['incident-notes', 'location-address', 'reporter-name', 'reporter-phone', 'animal-description'];
@@ -330,7 +448,11 @@
                 address: document.getElementById('location-address').value,
                 name: document.getElementById('reporter-name').value,
                 phone: document.getElementById('reporter-phone').value,
-                desc: document.getElementById('animal-description').value
+                desc: document.getElementById('animal-description').value,
+                coords: currentCoords,
+                accuracy: locationAccuracy,
+                locationTimestamp,
+                locationSource
               };
               sessionStorage.setItem('pawsos_report_draft', JSON.stringify(draft));
             } catch (e) {}
@@ -349,6 +471,12 @@
         if (draft.name) document.getElementById('reporter-name').value = draft.name;
         if (draft.phone) document.getElementById('reporter-phone').value = draft.phone;
         if (draft.desc) document.getElementById('animal-description').value = draft.desc;
+        if (draft.coords && Number.isFinite(draft.coords.lat) && Number.isFinite(draft.coords.lng)) {
+          currentCoords = draft.coords;
+          locationAccuracy = draft.accuracy || null;
+          locationTimestamp = draft.locationTimestamp || null;
+          locationSource = draft.locationSource || 'map_pin';
+        }
       } catch (e) {}
     }
 
@@ -360,8 +488,8 @@
       if (typeof L === 'undefined') return;
 
       reportMap = L.map('location-picker-map', {
-        center: [currentCoords.lat, currentCoords.lng],
-        zoom: 14
+        center: currentCoords ? [currentCoords.lat, currentCoords.lng] : [20, 0],
+        zoom: currentCoords ? 14 : 2
       });
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -370,27 +498,38 @@
       }).addTo(reportMap);
 
       const icon = window.pawMap.createIcon('urgent', '📍');
-      reportMarker = L.marker([currentCoords.lat, currentCoords.lng], {
+      reportMarker = L.marker(currentCoords ? [currentCoords.lat, currentCoords.lng] : [20, 0], {
         draggable: true,
         icon: icon
-      }).addTo(reportMap);
+      });
+      if (currentCoords) reportMarker.addTo(reportMap);
 
       reportMarker.on('dragend', (e) => {
         const pos = e.target.getLatLng();
-        setCoordinates(pos.lat, pos.lng);
+        setCoordinates(pos.lat, pos.lng, 'map_pin');
       });
 
       reportMap.on('click', (e) => {
-        reportMarker.setLatLng(e.latlng);
-        setCoordinates(e.latlng.lat, e.latlng.lng);
+        reportMarker.setLatLng(e.latlng).addTo(reportMap);
+        reportMap.setView(e.latlng, Math.max(reportMap.getZoom(), 14));
+        setCoordinates(e.latlng.lat, e.latlng.lng, 'map_pin');
       });
     }
 
-    function setCoordinates(lat, lng) {
+    function setCoordinates(lat, lng, source = 'map_pin', accuracy = null, timestamp = new Date().toISOString()) {
       currentCoords = { lat, lng };
+      locationAccuracy = accuracy;
+      locationTimestamp = timestamp;
+      locationSource = source;
       const addr = document.getElementById('location-address');
-      if (addr && !addr.value.includes('Jaipur')) {
-        addr.value = `Selected Point (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+      if (addr && !addr.value.trim()) {
+        addr.value = 'Map pin selected';
+      }
+      const statusInd = document.getElementById('gps-status-indicator');
+      if (statusInd && source === 'map_pin') {
+        statusInd.style.display = 'block';
+        statusInd.style.color = 'var(--text-muted)';
+        statusInd.textContent = 'Map pin selected. This is a manually placed location, not a GPS fix.';
       }
     }
 
@@ -408,18 +547,20 @@
 
         window.pawMap.getCurrentLocation(
           (pos) => {
-            btn.textContent = '✓ Location Locked';
+            btn.textContent = '✓ Location Captured';
             btn.disabled = false;
             statusInd.style.color = 'var(--status-green-text)';
-            statusInd.textContent = `Location captured within ~${Math.round(pos.accuracy || 15)}m accuracy.`;
+            statusInd.textContent = `Location captured. Accuracy: approximately ${Math.round(pos.accuracy)} metres.`;
 
-            currentCoords = { lat: pos.lat, lng: pos.lng };
+            setCoordinates(pos.lat, pos.lng, 'browser_geolocation', pos.accuracy, pos.timestamp);
             if (reportMap && reportMarker) {
               reportMap.setView([pos.lat, pos.lng], 16);
-              reportMarker.setLatLng([pos.lat, pos.lng]);
+              reportMarker.setLatLng([pos.lat, pos.lng]).addTo(reportMap);
             }
-            document.getElementById('location-address').value = `GPS Coordinates (${pos.lat.toFixed(4)}, ${pos.lng.toFixed(4)})`;
-            showToast('Current GPS coordinates detected!', 'success');
+            if (!document.getElementById('location-address').value.trim()) {
+              document.getElementById('location-address').value = 'GPS location captured';
+            }
+            showToast('Location captured. You can move the pin to adjust it.', 'success');
           },
           (errMsg) => {
             btn.textContent = '📍 Use My Current Location';
@@ -435,9 +576,33 @@
     function setupPhotoHandlers() {
       const box = document.getElementById('photo-upload-box');
       const input = document.getElementById('photo-file-input');
+      const takeBtn = document.getElementById('btn-take-photo');
+      const chooseBtn = document.getElementById('btn-choose-photo');
+
+      const openFilePicker = (useCamera = false) => {
+        if (!input) return;
+        if (useCamera && locationSource !== 'browser_geolocation') {
+          const statusInd = document.getElementById('gps-status-indicator');
+          if (statusInd) {
+            statusInd.style.display = 'block';
+            statusInd.style.color = 'var(--text-muted)';
+            statusInd.textContent = 'Capture your location first. Then return here and tap Take Photo; the browser must open the camera from a separate tap.';
+          }
+          window.showReportStep(3);
+          showToast('Capture your location before opening the camera. You can adjust the pin afterward.', 'error');
+          return;
+        }
+        selectedPhotoSource = useCamera ? 'camera' : 'gallery';
+        if (useCamera) {
+          input.setAttribute('capture', 'environment');
+        } else {
+          input.removeAttribute('capture');
+        }
+        input.click();
+      };
 
       if (box && input) {
-        box.addEventListener('click', () => input.click());
+        box.addEventListener('click', () => openFilePicker(false));
 
         input.addEventListener('change', (e) => {
           if (e.target.files && e.target.files[0]) {
@@ -456,19 +621,48 @@
           e.preventDefault();
           box.classList.remove('dragover');
           if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            selectedPhotoSource = 'gallery';
             handleSelectedPhoto(e.dataTransfer.files[0]);
           }
         });
       }
+
+      if (takeBtn) takeBtn.addEventListener('click', () => openFilePicker(true));
+      if (chooseBtn) chooseBtn.addEventListener('click', () => openFilePicker(false));
     }
 
     function handleSelectedPhoto(file) {
+      if (!['image/jpeg', 'image/png'].includes(file.type)) {
+        showToast('Choose a JPG or PNG image. Other image formats are not accepted yet.', 'error');
+        document.getElementById('photo-file-input').value = '';
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('That photo is too large. Please choose an image under 5 MB.', 'error');
+        document.getElementById('photo-file-input').value = '';
+        return;
+      }
+      attachedFile = file;
+      photoCapturedAt = selectedPhotoSource === 'camera' ? new Date().toISOString() : null;
+      photoLocationAtSelection = selectedPhotoSource === 'camera' && currentCoords
+        ? { lat: currentCoords.lat, lng: currentCoords.lng, accuracy: locationAccuracy }
+        : null;
       const reader = new FileReader();
       reader.onload = (e) => {
         attachedPhotoData = e.target.result;
         document.getElementById('photo-preview-img').src = attachedPhotoData;
-        document.getElementById('photo-name-label').textContent = file.name;
+        document.getElementById('photo-name-label').textContent = selectedPhotoSource === 'camera' ? 'Photo selected via Take Photo' : 'Existing photo uploaded';
+        document.getElementById('photo-evidence-indicator').textContent =
+          selectedPhotoSource === 'camera'
+            ? 'Selection time and the location available at selection are recorded. The image and its capture time are not independently verified.'
+            : 'Existing photo upload. Its capture time and original location are not verified.';
         document.getElementById('photo-preview-wrap').style.display = 'flex';
+      };
+      reader.onerror = () => {
+        attachedFile = null;
+        attachedPhotoData = null;
+        input.value = '';
+        showToast('The selected photo could not be previewed. Please choose it again.', 'error');
       };
       reader.readAsDataURL(file);
     }
@@ -476,6 +670,9 @@
     function clearPhotoAttachment() {
       attachedFile = null;
       attachedPhotoData = null;
+      photoCapturedAt = null;
+      photoLocationAtSelection = null;
+      selectedPhotoSource = 'gallery';
       document.getElementById('photo-file-input').value = '';
       document.getElementById('photo-preview-wrap').style.display = 'none';
       document.getElementById('photo-preview-img').src = '';
@@ -484,8 +681,16 @@
     function setupFormSubmission() {
       const form = document.getElementById('animal-report-form');
       if (!form) return;
+      let confirmedDuplicate = false;
+      const warning = document.getElementById('duplicate-report-warning');
+      const existingLink = document.getElementById('duplicate-report-link');
+      document.getElementById('submit-distinct-report').addEventListener('click', () => {
+        confirmedDuplicate = true;
+        warning.hidden = true;
+        form.requestSubmit();
+      });
 
-      form.addEventListener('submit', (e) => {
+      form.addEventListener('submit', async (e) => {
         e.preventDefault();
 
         const incidentSelect = document.getElementById('incident-type');
@@ -511,13 +716,18 @@
           document.getElementById('reporter-phone').focus();
           return;
         }
+        if (!currentCoords) {
+          showToast('Capture your location or place the pin on the map before submitting.', 'error');
+          document.getElementById('btn-use-gps').focus();
+          return;
+        }
 
         const btn = document.getElementById('btn-submit-report');
         btn.disabled = true;
         btn.textContent = 'Submitting report to dispatch...';
 
         const photoFileInput = document.getElementById('photo-file-input');
-        const photoFile = (photoFileInput && photoFileInput.files && photoFileInput.files[0]) ? photoFileInput.files[0] : null;
+        const photoFile = attachedFile || ((photoFileInput && photoFileInput.files && photoFileInput.files[0]) ? photoFileInput.files[0] : null);
 
         try {
           // Save report into database via store
@@ -528,17 +738,26 @@
             condition: incidentSelect.value,
             description: notes,
             address: address,
-            area: address.split(',')[0],
-            city: 'Metropolis',
+            area: '',
             lat: currentCoords.lat,
             lng: currentCoords.lng,
+            locationAccuracy,
+            locationTimestamp,
+            locationSource,
+            photoSource: selectedPhotoSource,
+            photoCapturedAt,
+            photoLocationAccuracy: photoLocationAtSelection ? photoLocationAtSelection.accuracy : locationAccuracy,
+            photoLatitude: photoLocationAtSelection ? photoLocationAtSelection.lat : null,
+            photoLongitude: photoLocationAtSelection ? photoLocationAtSelection.lng : null,
+            confirmDuplicate: confirmedDuplicate,
             photo: attachedPhotoData,
-            reporterName: reporterName || 'Community Citizen',
+            reporterName,
             reporterPhone: reporterPhone
           }, photoFile);
 
           // Show Confirmation Screen
           clearDraft();
+          confirmedDuplicate = false;
           document.getElementById('report-form-container').style.display = 'none';
           const confContainer = document.getElementById('report-confirmation-container');
           confContainer.style.display = 'block';
@@ -549,10 +768,18 @@
           document.getElementById('conf-track-btn').href = `case.html?id=${createdCase.id}`;
 
           window.scrollTo({ top: 0, behavior: 'smooth' });
-          showToast(`Report #${createdCase.id} registered in database!`, 'success');
+          showToast(`Report #${createdCase.id} was submitted.`, 'success');
         } catch (err) {
           btn.disabled = false;
           btn.textContent = '🚨 Submit Emergency Report';
+          const duplicateId = err.details && err.details.possible_duplicate && err.details.possible_duplicate.report_id;
+          if (err.code === 'POSSIBLE_DUPLICATE' && duplicateId) {
+            existingLink.href = `case.html?id=${encodeURIComponent(duplicateId)}`;
+            warning.hidden = false;
+            warning.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            confirmedDuplicate = false;
+            return;
+          }
           showToast('Failed to submit: ' + (err.message || 'Server error'), 'error');
         }
       });

@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     role VARCHAR(32) NOT NULL DEFAULT 'citizen',
+    requested_role VARCHAR(32) NOT NULL DEFAULT 'citizen',
+    verified BOOLEAN NOT NULL DEFAULT FALSE,
     phone VARCHAR(64),
     organization VARCHAR(255),
     created_at TIMESTAMP NOT NULL
@@ -30,8 +32,28 @@ CREATE TABLE IF NOT EXISTS reports (
     longitude DOUBLE PRECISION NOT NULL,
     assigned_responder_id VARCHAR(64),
     assigned_responder_name VARCHAR(255),
+    location_accuracy DOUBLE PRECISION,
+    location_timestamp TIMESTAMP,
+    location_source VARCHAR(32),
+    eta VARCHAR(128),
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS report_evidence (
+    id VARCHAR(64) PRIMARY KEY,
+    report_id VARCHAR(64) NOT NULL UNIQUE REFERENCES reports(id) ON DELETE CASCADE,
+    original_filename TEXT NOT NULL,
+    mime_type VARCHAR(128) NOT NULL,
+    file_size BIGINT NOT NULL,
+    sha256 VARCHAR(64) NOT NULL,
+    capture_timestamp TIMESTAMP,
+    upload_timestamp TIMESTAMP NOT NULL,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
+    location_accuracy DOUBLE PRECISION,
+    source_type VARCHAR(32) NOT NULL,
+    storage_reference TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS report_timeline (

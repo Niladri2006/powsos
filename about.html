@@ -3,11 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>About PawSOS & Emergency Animal First-Aid Handbook</title>
+  <title>About PawSOS — Animal Reporting and Safety Guidance</title>
   <meta name="description" content="Veterinary first-aid guidelines for street animals, national animal welfare helplines, and PawSOS community mission.">
   
   <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 </head>
 <body>
 
@@ -21,7 +20,7 @@
       <div class="section-eyebrow">About PawSOS</div>
       <h1 class="section-title">Bridging the Gap in Animal Emergency Care</h1>
       <p class="section-desc">
-        When someone encounters an animal in distress on the road, valuable time is often lost trying to find working contact numbers. PawSOS coordinates rapid community reporting with local volunteers.
+        PawSOS provides a public way to record animal distress reports and follow status changes. It is not an emergency dispatch service.
       </p>
     </div>
 
@@ -31,14 +30,14 @@
         <div>
           <h2 style="font-size: 1.5rem; margin-bottom: 0.75rem;">How PawSOS Operates</h2>
           <p style="color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
-            PawSOS is an open community response network. We do not replace veterinary hospitals or official government ambulances. Instead, we provide the digital dispatch layer that connects a person on the street with local volunteers who have transport, first aid, and shelter connections.
+            PawSOS records reports that can be reviewed by authorized responders. There is no automatic dispatch notification, verified clinic directory, or guaranteed response time in this deployment.
           </p>
           <p style="color: var(--text-secondary); margin-bottom: 1.5rem; line-height: 1.6;">
-            By sharing precise coordinates and photos, responders know exactly what supplies to bring before arriving on the scene.
+            When you allow location access, the report records the location and accuracy provided by your browser. Public maps use approximate pins; authorized responders can view the operational location.
           </p>
           <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
             <a href="report.html" class="btn btn-emergency btn-sm">Report an Animal</a>
-            <a href="#helplines" class="btn btn-secondary btn-sm">Emergency Helplines</a>
+            <a href="#helplines" class="btn btn-secondary btn-sm">Local contact information</a>
           </div>
         </div>
 
@@ -52,123 +51,64 @@
     <section id="first-aid" style="margin-bottom: 4rem;">
       <div style="margin-bottom: 2rem;">
         <div class="section-eyebrow">Field Guidelines</div>
-        <h2 style="font-size: 1.75rem; margin-bottom: 0.5rem;">Animal Emergency First-Aid Handbook</h2>
+        <h2 style="font-size:1.75rem;margin-bottom:.5rem;">While waiting for help</h2>
         <p style="color: var(--text-secondary); margin: 0;">
-          Essential immediate steps to stabilize a distressed animal before medical transport arrives.
+          General safety guidance only. PawSOS does not diagnose injuries or replace veterinary advice.
         </p>
       </div>
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem;">
-        
-        <!-- Hit & Run / Trauma -->
         <div class="card" style="border-top: 4px solid var(--emergency-red);">
           <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
             <span style="font-size: 1.5rem;">🚗</span>
-            <h3 style="font-size: 1.15rem; margin: 0;">Vehicular Impact / Trauma</h3>
+            <h3 style="font-size:1.15rem;margin:0;">Keep yourself safe</h3>
           </div>
           <ul style="color: var(--text-secondary); font-size: 0.88rem; list-style: none; display: flex; flex-direction: column; gap: 0.6rem; padding: 0;">
-            <li><strong>Approach cautiously:</strong> Pain can cause an otherwise gentle dog to snap or bite. Place a clean towel or jacket over the eyes to reduce panic.</li>
-            <li><strong>Prevent spinal damage:</strong> Do not drag or bend the animal. Slide a firm cardboard sheet or folded thick blanket underneath to act as a stretcher.</li>
-            <li><strong>Severe bleeding:</strong> Apply firm, direct pressure with clean cotton or cloth for at least 4 minutes without lifting.</li>
-            <li><strong>No forced liquids:</strong> An animal in shock can easily choke on oral water.</li>
+            <li>Stay out of traffic and other immediate hazards.</li>
+            <li>Keep a safe distance; a frightened or injured animal may react defensively.</li>
+            <li>Do not attempt to restrain or move the animal unless a qualified professional advises you and it is safe.</li>
           </ul>
         </div>
-
-        <!-- Heatstroke -->
-        <div class="card" style="border-top: 4px solid var(--urgency-amber);">
+        <div class="card" style="border-top:4px solid var(--urgency-amber);">
           <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
             <span style="font-size: 1.5rem;">☀️</span>
-            <h3 style="font-size: 1.15rem; margin: 0;">Heat Exhaustion & Dehydration</h3>
+            <h3 style="font-size:1.15rem;margin:0;">Share useful details</h3>
           </div>
           <ul style="color: var(--text-secondary); font-size: 0.88rem; list-style: none; display: flex; flex-direction: column; gap: 0.6rem; padding: 0;">
-            <li><strong>Warning signs:</strong> Heavy continuous panting, bright red or dry gums, glazed eyes, inability to stand up.</li>
-            <li><strong>Move to shade:</strong> Relocate the animal to shaded pavement or under a tree immediately.</li>
-            <li><strong>Gradual cooling:</strong> Wet paws, groin, and neck with normal room-temperature water. <em>Never use ice-cold water</em>, as it causes blood vessels to constrict and traps heat inside the core.</li>
-            <li><strong>Safe hydration:</strong> Offer small amounts of water or oral electrolyte solution only if the animal is conscious and alert.</li>
+            <li>Note a nearby landmark and the direction the animal is moving, if safe.</li>
+            <li>Keep children and pets at a distance.</li>
+            <li>Do not give food, water, or medication unless a veterinary professional advises it.</li>
           </ul>
         </div>
-
-        <!-- Bird Injuries -->
-        <div class="card" style="border-top: 4px solid var(--brand-primary);">
+        <div class="card" style="border-top:4px solid var(--brand-primary);">
           <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
             <span style="font-size: 1.5rem;">🕊️</span>
-            <h3 style="font-size: 1.15rem; margin: 0;">Birds Tangled in String (Manja)</h3>
+            <h3 style="font-size:1.15rem;margin:0;">For trapped or wild animals</h3>
           </div>
           <ul style="color: var(--text-secondary); font-size: 0.88rem; list-style: none; display: flex; flex-direction: column; gap: 0.6rem; padding: 0;">
-            <li><strong>Cover immediately:</strong> Covering a bird's head with a light cotton cloth stops frantic wing-flapping within seconds.</li>
-            <li><strong>Do not pull tight strings:</strong> Pulling glass-coated thread can sever tendons. Carefully snip the string with scissors without pulling against the skin.</li>
-            <li><strong>Transport box:</strong> Place the bird in a ventilated cardboard box lined with newspaper in a quiet, dark room until assistance arrives.</li>
-            <li><strong>Never drop water in beak:</strong> Birds have open airway slits at the tongue base; drops will enter lungs.</li>
+            <li>Do not enter drains, climb, cut entanglements, or attempt a rescue that could injure you or the animal.</li>
+            <li>Keep the area calm and contact a local qualified rescue or veterinary service directly.</li>
+            <li>Let responders know about hazards, access restrictions, or movement you observe.</li>
           </ul>
         </div>
 
       </div>
     </section>
 
-    <!-- Verified Helplines Directory -->
+    <!-- Local Emergency Contacts -->
     <section id="helplines" style="margin-bottom: 4rem;">
       <div style="margin-bottom: 1.5rem;">
         <div class="section-eyebrow">Direct Assistance</div>
-        <h2 style="font-size: 1.75rem; margin-bottom: 0.5rem;">Verified Animal Welfare Helplines</h2>
+        <h2 style="font-size: 1.75rem; margin-bottom: 0.5rem;">Local animal emergency contacts</h2>
         <p style="color: var(--text-secondary); margin: 0;">
-          Official toll-free government lines and verified non-profit animal rescue units.
+          Emergency numbers and coverage vary by region. This deployment does not yet have a locally verified contact directory. If the animal is in immediate danger, contact a local veterinary or animal rescue service directly.
         </p>
       </div>
 
       <div class="card" style="padding: 0; overflow: hidden;">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Service / Organization</th>
-              <th>Coverage Region</th>
-              <th>Helpline Number</th>
-              <th>Service Hours</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>
-                <strong>National Animal Mobile Ambulance</strong>
-                <div style="font-size: 0.78rem; color: var(--text-muted);">Govt. Veterinary Emergency Service</div>
-              </td>
-              <td>Pan-India</td>
-              <td style="font-family: var(--font-mono); font-weight: 700; color: var(--emergency-red);">1962</td>
-              <td>24x7 Helpline</td>
-              <td><a href="tel:1962" class="btn btn-emergency btn-sm">Dial 1962</a></td>
-            </tr>
-            <tr>
-              <td>
-                <strong>Help in Suffering (HIS)</strong>
-                <div style="font-size: 0.78rem; color: var(--text-muted);">Veterinary Hospital & Shelter</div>
-              </td>
-              <td>Jaipur & Surrounding Areas</td>
-              <td style="font-family: var(--font-mono);">+91 141 2760012</td>
-              <td>8:00 AM – 8:00 PM</td>
-              <td><a href="tel:01412760012" class="btn btn-secondary btn-sm">Call</a></td>
-            </tr>
-            <tr>
-              <td>
-                <strong>Animal Aid Unlimited</strong>
-                <div style="font-size: 0.78rem; color: var(--text-muted);">Street Animal Hospital</div>
-              </td>
-              <td>Rajasthan Region</td>
-              <td style="font-family: var(--font-mono);">+91 99829 55665</td>
-              <td>24x7 Emergency</td>
-              <td><a href="tel:9982955665" class="btn btn-secondary btn-sm">Call</a></td>
-            </tr>
-            <tr>
-              <td>
-                <strong>PETA India Emergency Dispatch</strong>
-                <div style="font-size: 0.78rem; color: var(--text-muted);">National Coordination Line</div>
-              </td>
-              <td>Pan-India</td>
-              <td style="font-family: var(--font-mono);">+91 98201 22602</td>
-              <td>24x7 Helpline</td>
-              <td><a href="tel:9820122602" class="btn btn-secondary btn-sm">Call</a></td>
-            </tr>
-          </tbody>
-        </table>
+        <div style="padding:1.25rem;color:var(--text-secondary);">
+          No local contacts have been verified for this deployment yet. Please do not rely on an unverified phone number during an emergency.
+        </div>
       </div>
     </section>
 
@@ -203,17 +143,28 @@
           <div class="form-group">
             <label class="form-label" for="vol-capacity">How Can You Help?</label>
             <select class="form-control" id="vol-capacity">
-              <option value="rescue_transport">Rescue Transport (Have two-wheeler or car with crate)</option>
-              <option value="first_aid">Basic First Aid & Wound Dressing</option>
-              <option value="foster">Temporary Shelter / Recovery Foster Care</option>
-              <option value="vet_student">Veterinary Professional / Student</option>
-              <option value="feeder">Daily Community Animal Feeder</option>
+              <option value="Transport">Transport</option>
+              <option value="First aid">First aid</option>
+              <option value="Temporary shelter">Temporary shelter</option>
+              <option value="Veterinary support">Veterinary support</option>
+              <option value="Other">Other</option>
             </select>
           </div>
 
-          <button type="submit" class="btn btn-primary btn-block">
+          <div class="form-group">
+            <label class="form-label" for="vol-email">Email address <span class="req">*</span></label>
+            <input type="email" class="form-control" id="vol-email" autocomplete="email" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="vol-password">Password <span class="req">*</span></label>
+            <input type="password" class="form-control" id="vol-password" minlength="12" autocomplete="new-password" required>
+            <div class="form-hint">Use at least 12 characters. Your account will remain a citizen account until an administrator verifies the responder application.</div>
+          </div>
+
+          <button type="submit" id="vol-submit-btn" class="btn btn-primary btn-block">
             <span>Register as Volunteer Responder</span>
           </button>
+          <p id="vol-application-result" role="status" aria-live="polite" style="margin:.9rem 0 0;"></p>
         </form>
       </div>
     </section>
@@ -221,7 +172,6 @@
   </main>
 
   <!-- Scripts -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="js/api.js"></script>
   <script src="js/sound.js"></script>
   <script src="js/store.js"></script>
@@ -229,14 +179,75 @@
   <script src="js/ui.js"></script>
 
   <script>
-    function submitVolunteerForm(e) {
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!window.pawAPI || !window.pawAPI.isAuthenticated()) return;
+      const user = window.pawAPI.getCurrentUser();
+      if (!user) return;
+      document.getElementById('vol-name').value = user.name || '';
+      document.getElementById('vol-email').value = user.email || '';
+      document.getElementById('vol-phone').value = user.phone || '';
+      const passwordGroup = document.getElementById('vol-password').closest('.form-group');
+      document.getElementById('vol-password').required = false;
+      passwordGroup.hidden = true;
+      document.getElementById('vol-application-result').textContent = 'You are signed in. This application will use your existing account.';
+    });
+
+    async function submitVolunteerForm(e) {
       e.preventDefault();
       const name = document.getElementById('vol-name').value.trim();
       const phone = document.getElementById('vol-phone').value.trim();
       const area = document.getElementById('vol-area').value.trim();
-
-      showToast(`Thank you, ${name}! Your registration for ${area} has been received.`, 'success', 5000);
-      e.target.reset();
+      const email = document.getElementById('vol-email').value.trim();
+      const password = document.getElementById('vol-password').value;
+      const support = document.getElementById('vol-capacity').value;
+      const button = document.getElementById('vol-submit-btn');
+      const result = document.getElementById('vol-application-result');
+      button.disabled = true;
+      result.textContent = '';
+      try {
+        if (!window.pawAPI) throw new Error('PawSOS could not connect to the account service.');
+        const organization = `Area: ${area}; Help offered: ${support}`;
+        let applicant;
+        if (window.pawAPI.isAuthenticated()) {
+          const user = await window.pawAPI.getMe();
+          if (!user || user.role !== 'citizen') {
+            throw new Error('Sign in with a citizen account to apply, or sign out to register a new account.');
+          }
+          if (user.email.toLowerCase() !== email.toLowerCase()) {
+            throw new Error('The email must match the account currently signed in.');
+          }
+          if (user.name !== name) {
+            throw new Error('The name must match your signed-in account. Profile name changes are not available here.');
+          }
+          const response = await window.pawAPI.applyAsResponder({ phone, organization });
+          if (response.status !== 'pending_review') {
+            throw new Error('The server did not confirm a responder application.');
+          }
+          applicant = user;
+        } else {
+          const response = await window.pawAPI.register({
+            name,
+            email,
+            password,
+            phone,
+            organization,
+            role: 'responder'
+          });
+          if (!response.user || response.user.role !== 'citizen' || response.user.requested_role !== 'responder') {
+            throw new Error('The server did not confirm a responder application.');
+          }
+          applicant = response.user;
+        }
+        result.textContent = 'Your responder application was received. Responder access is pending administrator review; you cannot accept cases until verified.';
+        showToast('Responder application is pending review.', 'success');
+        e.target.reset();
+        if (window.pawStore) window.pawStore.setActiveUser(applicant);
+      } catch (err) {
+        result.textContent = err.message || 'Your application could not be submitted.';
+        showToast(result.textContent, 'error');
+      } finally {
+        button.disabled = false;
+      }
     }
   </script>
 </body>

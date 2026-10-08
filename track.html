@@ -4,10 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Track a Report — PawSOS</title>
-  <meta name="description" content="Check the live status, responder assignment, and medical updates for your submitted animal rescue reports.">
+  <meta name="description" content="Look up an animal report by its reference code and view status updates recorded by responders.">
   
   <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 </head>
 <body>
 
@@ -19,7 +18,7 @@
     <div style="text-align: center; margin-bottom: 2.5rem;">
       <h1 style="font-size: 2.2rem; margin-bottom: 0.5rem;">Track an Animal Rescue Report</h1>
       <p style="color: var(--text-secondary); max-width: 500px; margin: 0 auto;">
-        Enter your reference code to view responder assignment, arrival time, and rescue updates.
+        Enter the reference code you received after submission to view status updates recorded for that report.
       </p>
     </div>
 
@@ -27,13 +26,13 @@
     <div class="card" style="padding: 2rem; margin-bottom: 2.5rem;">
       <form id="track-lookup-form" onsubmit="handleLookup(event)">
         <label class="form-label" for="lookup-input">
-          Enter Reference Code or Number
+          Enter Reference Code
         </label>
         
         <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-          <input type="text" class="form-control" id="lookup-input" placeholder="e.g. PAW-1024 or 1024" required style="flex: 1; font-family: var(--font-mono); text-transform: uppercase;">
+          <input type="text" class="form-control" id="lookup-input" placeholder="e.g. PAW-…" required style="flex: 1; font-family: var(--font-mono); text-transform: uppercase;" autocomplete="off">
           <button type="submit" class="btn btn-primary">
-            <span>Find Report</span>
+            <span>Look Up Report</span>
           </button>
         </div>
 
@@ -53,20 +52,9 @@
       </div>
     </div>
 
-    <!-- Community Sample Reports to Explore -->
-    <div style="margin-top: 3.5rem; padding-top: 2rem; border-top: 1px solid var(--border-light);">
-      <h3 style="font-size: 1.05rem; margin-bottom: 1rem; color: var(--text-secondary);">
-        Community Reports in Progress:
-      </h3>
-      <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;" id="sample-codes-container">
-        <!-- Rendered dynamically -->
-      </div>
-    </div>
-
   </main>
 
   <!-- Scripts -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="js/api.js"></script>
   <script src="js/sound.js"></script>
   <script src="js/store.js"></script>
@@ -76,74 +64,82 @@
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       renderMyReports();
-      renderSampleTags();
     });
 
-    function handleLookup(e) {
+    async function handleLookup(e) {
       e.preventDefault();
       const input = document.getElementById('lookup-input').value.trim();
       const err = document.getElementById('lookup-error-msg');
       if (!input) return;
-
-      const target = window.pawStore.getCaseById(input);
-      if (target) {
+      const button = e.currentTarget.querySelector('button[type="submit"]');
+      button.disabled = true;
+      err.style.display = 'none';
+      try {
+        const target = await window.pawAPI.getReport(input);
         err.style.display = 'none';
-        window.location.href = `case.html?id=${target.id}`;
-      } else {
+        window.location.href = `case.html?id=${encodeURIComponent(target.id)}`;
+      } catch (error) {
         err.style.display = 'block';
-        err.textContent = `No active or past report found matching "${input}". Please check the code or tap a report below.`;
+        err.textContent = error.status === 404
+          ? 'No report was found for that reference code. Check the code and try again.'
+          : error.message || 'The report could not be checked. Please try again when your connection is available.';
+      } finally {
+        button.disabled = false;
       }
     }
 
-    function renderMyReports() {
+    async function renderMyReports() {
       const container = document.getElementById('my-reports-list');
       const countEl = document.getElementById('device-reports-count');
       if (!container || !window.pawStore) return;
 
-      const myReports = window.pawStore.getMyReports();
-      countEl.textContent = `${myReports.length} report${myReports.length === 1 ? '' : 's'}`;
+      const reportIds = window.pawStore.getMyReportIds();
+      countEl.textContent = `${reportIds.length} saved`;
 
-      if (myReports.length === 0) {
+      if (reportIds.length === 0) {
         container.innerHTML = `
           <div class="card" style="text-align: center; padding: 2rem; color: var(--text-muted);">
             <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">📋</div>
-            <p style="margin: 0; font-size: 0.92rem;">You haven't submitted any reports from this device yet.</p>
+            <p style="margin: 0; font-size: 0.92rem;">No report references are saved on this device. You can still look up a report with its reference code above.</p>
             <a href="report.html" class="btn btn-secondary btn-sm" style="margin-top: 1rem;">+ Report an Animal</a>
           </div>
         `;
         return;
       }
 
+      const escape = window.pawEscapeHTML;
+      container.innerHTML = '<p role="status">Checking saved report references…</p>';
+      const results = await Promise.all(reportIds.map(async id => {
+        try {
+          const report = await window.pawAPI.getReport(id);
+          return window.pawStore.normalizeBackendReport(report);
+        } catch {
+          return { id, unavailable: true };
+        }
+      }));
+      const myReports = results.filter(report => !report.unavailable);
+      if (myReports.length === 0) {
+        container.innerHTML = '<p role="status">Saved references could not be checked right now. Use the reference code above when the connection is available.</p>';
+        return;
+      }
       container.innerHTML = myReports.map(c => `
         <div class="card card-hover" style="display: flex; justify-content: space-between; align-items: center; padding: 1.25rem; gap: 1rem; flex-wrap: wrap;">
           <div style="display: flex; align-items: center; gap: 1rem;">
-            <img src="${c.photo || 'assets/dog-sample.jpg'}" style="width: 50px; height: 50px; object-fit: cover; border-radius: var(--radius-xs);" onerror="this.src='assets/dog-sample.jpg'">
+            ${c.photo ? `<img src="${escape(c.photo)}" alt="" width="50" height="50" style="object-fit: cover; border-radius: var(--radius-xs);">` : '<span aria-hidden="true" style="font-size:1.5rem;">🐾</span>'}
             <div>
               <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <strong style="font-family: var(--font-mono); font-size: 1rem; color: var(--brand-primary);">${c.id}</strong>
-                <span class="badge ${c.status === 'resolved' ? 'badge-resolved' : 'badge-urgent'}">${c.status.replace('_', ' ')}</span>
+                <strong style="font-family: var(--font-mono); font-size: 1rem; color: var(--brand-primary);">${escape(c.id)}</strong>
+                <span class="badge ${c.status === 'resolved' ? 'badge-resolved' : 'badge-urgent'}">${escape(c.status.replaceAll('_', ' '))}</span>
               </div>
-              <div style="font-size: 0.88rem; color: var(--text-main); font-weight: 600;">${c.animalName}</div>
-              <div style="font-size: 0.8rem; color: var(--text-muted);">${c.location ? c.location.address : 'Jaipur'}</div>
+              <div style="font-size: 0.88rem; color: var(--text-main); font-weight: 600;">${escape(c.animalName)}</div>
+              <div style="font-size: 0.8rem; color: var(--text-muted);">${escape(c.location ? c.location.area || c.location.city || 'Approximate area' : 'Approximate area')}</div>
             </div>
           </div>
 
-          <a href="case.html?id=${c.id}" class="btn btn-secondary btn-sm">
+          <a href="case.html?id=${encodeURIComponent(c.id)}" class="btn btn-secondary btn-sm">
             View Live Tracker →
           </a>
         </div>
-      `).join('');
-    }
-
-    function renderSampleTags() {
-      const container = document.getElementById('sample-codes-container');
-      if (!container || !window.pawStore) return;
-
-      const cases = window.pawStore.getAllCases();
-      container.innerHTML = cases.map(c => `
-        <a href="case.html?id=${c.id}" class="btn btn-secondary btn-sm" style="font-family: var(--font-mono); font-size: 0.82rem;">
-          ${c.id} (${c.animalName.split(' ')[0]})
-        </a>
       `).join('');
     }
   </script>

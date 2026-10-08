@@ -4,8 +4,8 @@
  */
 
 const PawMap = {
-  defaultCenter: [26.8928, 75.7873], // City center coordinates (Jaipur)
-  defaultZoom: 13,
+  defaultCenter: [20, 0],
+  defaultZoom: 2,
 
   createIcon(urgency = 'urgent', label = '🐾') {
     if (typeof L === 'undefined') return null;
@@ -25,7 +25,7 @@ const PawMap = {
   },
 
   calculateDistance(lat1, lon1, lat2, lon2) {
-    if (!lat1 || !lon1 || !lat2 || !lon2) return '';
+    if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) return '';
     const R = 6371; // Earth radius in km
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
@@ -40,7 +40,7 @@ const PawMap = {
 
   getCurrentLocation(onSuccess, onError) {
     if (!navigator.geolocation) {
-      if (onError) onError('Geolocation is not supported by your browser.');
+      if (onError) onError('Location is unavailable in this browser. Place the pin manually on the map.');
       return;
     }
 
@@ -49,14 +49,15 @@ const PawMap = {
         onSuccess({
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
-          accuracy: pos.coords.accuracy
+          accuracy: pos.coords.accuracy,
+          timestamp: new Date(pos.timestamp).toISOString()
         });
       },
       (err) => {
-        let msg = 'Unable to retrieve location.';
-        if (err.code === 1) msg = 'Location permission denied by user.';
-        else if (err.code === 2) msg = 'Location position unavailable.';
-        else if (err.code === 3) msg = 'Location request timed out.';
+        let msg = 'Location could not be determined. Place the pin manually on the map.';
+        if (err.code === 1) msg = 'Location permission was denied. You can place the pin manually on the map.';
+        else if (err.code === 2) msg = 'Your device could not determine its location. Try again or place the pin manually.';
+        else if (err.code === 3) msg = 'Location request timed out. Try again or place the pin manually.';
         if (onError) onError(msg);
       },
       { timeout: 9000, enableHighAccuracy: true }

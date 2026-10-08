@@ -7,7 +7,6 @@
   <meta name="description" content="Central incident log and dispatch records for animal rescue organizations and shelter administrators.">
   
   <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 </head>
 <body>
 
@@ -21,7 +20,7 @@
       <div>
         <h1 style="font-size: 2rem; margin-bottom: 0.25rem;">Incident Registry & Dispatch Records</h1>
         <p style="color: var(--text-secondary); margin: 0; font-size: 0.95rem;">
-          Official community log of animal emergencies, volunteer dispatches, and resolutions.
+          Administrative view of reports and responder actions recorded in PawSOS.
         </p>
       </div>
 
@@ -46,15 +45,23 @@
       <div class="card" style="padding: 1.25rem; border-left: 4px solid var(--urgency-amber);">
         <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">Active Dispatches</div>
         <div style="font-size: 1.8rem; font-weight: 800; font-family: var(--font-mono); color: var(--urgency-amber);" id="reg-stat-active">0</div>
-        <div style="font-size: 0.78rem; color: var(--urgency-amber);">Under active care / transport</div>
+        <div style="font-size:.78rem;color:var(--urgency-amber);">Open reports by recorded status</div>
       </div>
 
       <div class="card" style="padding: 1.25rem; border-left: 4px solid var(--status-green);">
         <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">Resolved Cases</div>
         <div style="font-size: 1.8rem; font-weight: 800; font-family: var(--font-mono); color: var(--status-green);" id="reg-stat-resolved">0</div>
-        <div style="font-size: 0.78rem; color: var(--status-green);">Admitted to shelter / Treated</div>
+        <div style="font-size:.78rem;color:var(--status-green);">Marked resolved by a responder</div>
       </div>
     </div>
+
+    <section class="card" aria-labelledby="responder-applications-heading" style="padding: 1.5rem; margin-bottom: 2rem;">
+      <h2 id="responder-applications-heading" style="font-size: 1.2rem; margin-bottom: .5rem;">Responder applications</h2>
+      <p style="color: var(--text-secondary); font-size: .9rem;">Review applications before granting responder access. Verification should reflect checks completed outside PawSOS.</p>
+      <div id="responder-applications" aria-live="polite">
+        <p>Loading applications…</p>
+      </div>
+    </section>
 
     <!-- Master Registry Table Card -->
     <div class="card" style="padding: 1.5rem;">
@@ -99,7 +106,6 @@
   </main>
 
   <!-- Scripts -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="js/api.js"></script>
   <script src="js/sound.js"></script>
   <script src="js/store.js"></script>
@@ -107,23 +113,84 @@
   <script src="js/ui.js"></script>
 
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      renderRegistry();
+    document.addEventListener('DOMContentLoaded', initializeAdminRegistry);
 
+    async function initializeAdminRegistry() {
+      if (!window.pawAPI || !window.pawAPI.isAdmin()) {
+        window.location.replace('login.html');
+        return;
+      }
+      const user = await window.pawAPI.getMe();
+      if (!user || user.role !== 'admin' || !user.verified) {
+        document.querySelector('main').innerHTML = `
+          <div class="card" style="max-width:640px;margin:3rem auto;padding:2rem;">
+            <h1>Administrator access is restricted</h1>
+            <p>This registry is available only to an active administrator account.</p>
+            <a href="index.html" class="btn btn-secondary">Return to PawSOS</a>
+          </div>`;
+        return;
+      }
+      await renderResponderApplications();
+      renderRegistry();
       if (window.pawStore) {
         window.pawStore.subscribe(() => {
           renderRegistry();
         });
       }
+    }
+
+    async function renderResponderApplications() {
+      const container = document.getElementById('responder-applications');
+      try {
+        const result = await window.pawAPI.getPendingResponders();
+        const responders = result.responders || [];
+        if (!responders.length) {
+          container.textContent = 'There are no responder applications awaiting review.';
+          return;
+        }
+        const escape = window.pawEscapeHTML;
+        container.innerHTML = responders.map(responder => `
+          <article class="card" style="padding:1rem;margin-top:.75rem;">
+            <h3 style="font-size:1rem;margin-bottom:.25rem;">${escape(responder.name)}</h3>
+            <p style="margin:0;color:var(--text-secondary);">${escape(responder.email)}</p>
+            <p style="margin:.25rem 0;color:var(--text-secondary);">${escape(responder.organization || 'No organization provided')} · ${escape(responder.phone || 'No phone provided')}</p>
+            <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem;">
+              <button type="button" class="btn btn-primary btn-sm" data-responder-id="${escape(responder.id)}" data-verified="true">Verify responder</button>
+              <button type="button" class="btn btn-secondary btn-sm" data-responder-id="${escape(responder.id)}" data-verified="false">Decline application</button>
+            </div>
+          </article>`).join('');
+      } catch (error) {
+        container.textContent = error.message || 'Responder applications could not be loaded.';
+      }
+    }
+
+    document.getElementById('responder-applications').addEventListener('click', async event => {
+      const button = event.target.closest('button[data-responder-id]');
+      if (!button) return;
+      button.disabled = true;
+      try {
+        await window.pawAPI.setResponderVerification(button.dataset.responderId, button.dataset.verified === 'true');
+        showToast(button.dataset.verified === 'true' ? 'Responder verified.' : 'Application declined.', 'success');
+        await renderResponderApplications();
+      } catch (error) {
+        button.disabled = false;
+        showToast(error.message || 'Responder application could not be updated.', 'error');
+      }
     });
 
-    function renderRegistry() {
+    async function renderRegistry() {
       if (!window.pawStore) return;
-      const stats = window.pawStore.getStats();
-
-      document.getElementById('reg-stat-total').textContent = stats.total;
-      document.getElementById('reg-stat-active').textContent = stats.active;
-      document.getElementById('reg-stat-resolved').textContent = stats.resolved;
+      try {
+        const stats = await window.pawAPI.getStats();
+        document.getElementById('reg-stat-total').textContent = stats.total_reports;
+        document.getElementById('reg-stat-active').textContent = stats.active_cases;
+        document.getElementById('reg-stat-resolved').textContent = stats.resolved_cases;
+      } catch (err) {
+        document.getElementById('reg-stat-total').textContent = '—';
+        document.getElementById('reg-stat-active').textContent = '—';
+        document.getElementById('reg-stat-resolved').textContent = '—';
+        showToast(err.message || 'Report totals could not be loaded.', 'error');
+      }
 
       filterRegistryTable();
     }
@@ -150,68 +217,38 @@
         return;
       }
 
-      tbody.innerHTML = filtered.map(c => `
-        <tr>
-          <td style="font-family: var(--font-mono); font-weight: 700; color: var(--brand-primary);">${c.id}</td>
-          <td>
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <img src="${c.photo || 'assets/dog-sample.jpg'}" style="width: 28px; height: 28px; border-radius: 4px; object-fit: cover;" onerror="this.src='assets/dog-sample.jpg'">
-              <span>${c.animalName}</span>
-            </div>
-          </td>
-          <td style="max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${c.condition}">${c.condition}</td>
-          <td style="font-size: 0.85rem; color: var(--text-secondary);">${c.location ? c.location.area || c.location.city : 'Jaipur'}</td>
-          <td>
-            <span class="badge ${c.urgency === 'critical' ? 'badge-emergency' : (c.urgency === 'urgent' ? 'badge-urgent' : 'badge-neutral')}">${c.urgency}</span>
-          </td>
-          <td>
-            <span class="badge ${c.status === 'resolved' ? 'badge-resolved' : 'badge-neutral'}">${c.status.replace('_', ' ')}</span>
-          </td>
-          <td style="font-size: 0.85rem;">
-            ${c.responder ? `<strong>${c.responder.name}</strong>` : '<span style="color: var(--text-muted);">Unassigned</span>'}
-          </td>
-          <td>
-            <a href="case.html?id=${c.id}" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.78rem;">
-              View Record →
-            </a>
-          </td>
-        </tr>
-      `).join('');
+      tbody.innerHTML = filtered.map(c => {
+        const escape = window.pawEscapeHTML;
+        const image = c.photo
+          ? `<img src="${escape(c.photo)}" alt="" style="width:28px;height:28px;border-radius:4px;object-fit:cover;">`
+          : '<span aria-hidden="true">🐾</span>';
+        return `
+          <tr>
+            <td style="font-family:var(--font-mono);font-weight:700;color:var(--brand-primary);">${escape(c.id)}</td>
+            <td><div style="display:flex;align-items:center;gap:.5rem;">${image}<span>${escape(c.animalName)}</span></div></td>
+            <td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escape(c.condition)}">${escape(c.condition)}</td>
+            <td style="font-size:.85rem;color:var(--text-secondary);">${escape(c.location ? c.location.area || c.location.city || 'Approximate area' : 'Approximate area')}</td>
+            <td><span class="badge ${c.urgency === 'critical' ? 'badge-emergency' : (c.urgency === 'urgent' ? 'badge-urgent' : 'badge-neutral')}">${escape(c.urgency)}</span></td>
+            <td><span class="badge ${c.status === 'resolved' ? 'badge-resolved' : 'badge-neutral'}">${escape(c.status.replaceAll('_', ' '))}</span></td>
+            <td style="font-size:.85rem;">${c.responder ? `<strong>${escape(c.responder.name)}</strong>` : '<span style="color:var(--text-muted);">Unassigned</span>'}</td>
+            <td><a href="case.html?id=${encodeURIComponent(c.id)}" class="btn btn-secondary btn-sm" style="padding:.25rem .5rem;font-size:.78rem;">View Record →</a></td>
+          </tr>`;
+      }).join('');
     }
 
     async function exportDataCSV() {
-      if (window.pawAPI && window.pawAPI.isAdmin()) {
-        try {
-          const res = await fetch(window.pawAPI.getExportUrl(), {
-            headers: { 'Authorization': `Bearer ${window.pawAPI.getToken()}` }
-          });
-          if (res.ok) {
-            const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `pawsos_server_export_${new Date().toISOString().slice(0, 10)}.csv`;
-            a.click();
-            showToast('Database verified CSV exported', 'success');
-            return;
-          }
-        } catch (e) {}
+      try {
+        const csv = await window.pawAPI.request('/reports/export', { method: 'GET' });
+        const url = window.URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `pawsos_incident_export_${new Date().toISOString().slice(0, 10)}.csv`;
+        link.click();
+        setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+        showToast('Server report export downloaded.', 'success');
+      } catch (err) {
+        showToast(err.message || 'The server report export could not be downloaded.', 'error');
       }
-
-      const cases = window.pawStore.getAllCases();
-      let csv = 'Case ID,Animal Name,Species,Urgency,Status,Location,Reported Condition,Time Logged\n';
-
-      cases.forEach(c => {
-        csv += `"${c.id}","${c.animalName}","${c.animalType}","${c.urgency}","${c.status}","${(c.location ? c.location.address : '').replace(/"/g, '""')}","${(c.condition || '').replace(/"/g, '""')}","${c.createdAt}"\n`;
-      });
-
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.setAttribute('href', url);
-      a.setAttribute('download', `pawsos_incident_log_${new Date().toISOString().slice(0, 10)}.csv`);
-      a.click();
-      showToast('Incident records CSV exported', 'success');
     }
   </script>
 </body>

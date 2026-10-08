@@ -9,22 +9,25 @@ RUN go mod download
 
 COPY . .
 
-RUN mkdir -p cmd/server internal/auth internal/config internal/database \
-    internal/handlers internal/middleware internal/models internal/storage \
-    migrations css js assets tests && \
-    mv main.go cmd/server/main.go && \
-    mv auth.go internal/auth/auth.go && \
-    mv config.go internal/config/config.go && \
-    mv db.go internal/database/db.go && \
-    mv handlers.go internal/handlers/handlers.go && \
-    mv middleware.go internal/middleware/middleware.go && \
-    mv models.go internal/models/models.go && \
-    mv storage.go internal/storage/storage.go && \
-    mv 001_init.sql migrations/001_init.sql && \
-    mv style.css css/style.css && \
-    mv api.js map-utils.js sound.js store.js ui.js js/ && \
-    mv cat-sample.jpg dog-sample.jpg hero-banner.jpg assets/ && \
-    mv api_test.go tests/api_test.go
+RUN if [ -f main.go ]; then \
+      mkdir -p cmd/server internal/auth internal/config internal/database \
+        internal/handlers internal/middleware internal/models internal/storage \
+        migrations css js assets tests && \
+      mv main.go cmd/server/main.go && \
+      mv auth.go internal/auth/auth.go && \
+      mv config.go internal/config/config.go && \
+      mv db.go internal/database/db.go && \
+      mv handlers.go internal/handlers/handlers.go && \
+      mv middleware.go internal/middleware/middleware.go && \
+      mv models.go internal/models/models.go && \
+      mv storage.go internal/storage/storage.go && \
+      mv 001_init.sql migrations/001_init.sql && \
+      mv style.css css/style.css && \
+      mv api.js map-utils.js sound.js store.js ui.js js/ && \
+      mv cat-sample.jpg dog-sample.jpg hero-banner.jpg assets/ && \
+      mv api_test.go tests/api_test.go && \
+      mv storage_test.go internal/storage/storage_test.go; \
+    fi
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-s -w -extldflags '-static'" \

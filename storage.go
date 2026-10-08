@@ -1,11 +1,15 @@
 package storage
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"image"
-	_ "image/jpeg"
-	_ "image/png"
+	_ "image/gif"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"net/http"
 	"os"
@@ -17,111 +21,128 @@ import (
 
 var (
 	ErrFileTooLarge    = errors.New("file exceeds maximum allowed upload size")
-	ErrInvalidFileType = errors.New("invalid file type: only JPG, PNG, and WebP images are permitted")
+	ErrInvalidFileType = errors.New("invalid file type: only JPG and PNG images are permitted")
 	ErrEmptyFile       = errors.New("file is empty")
 )
 
 type Storage struct {
-	baseDir     string
+	baseDir      string
 	maxSizeBytes int64
 }
 
+type SavedImage struct {
+	Path              string
+	OriginalReference string
+	MIMEType          string
+	Size              int64
+	SHA256            string
+}
+
 func NewStorage(baseDir string, maxUploadSizeMB int64) (*Storage, error) {
-	if err := os.MkdirAll(baseDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create upload directory %s: %w", baseDir, err)
+	for _, dir := range []string{filepath.Join(baseDir, "originals"), filepath.Join(baseDir, "public", "reports")} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create upload directory %s: %w", dir, err)
+		}
 	}
 
 	return &Storage{
-		baseDir:     baseDir,
+		baseDir:      baseDir,
 		maxSizeBytes: maxUploadSizeMB * 1024 * 1024,
 	}, nil
 }
 
-// SaveImage validates the file header, MIME type, and image structure, then saves it to disk
-func (s *Storage) SaveImage(reader io.Reader, originalFilename string) (string, error) {
-	// Read first 512 bytes for MIME type sniffing
-	buf := make([]byte, 512)
-	n, err := io.ReadFull(reader, buf)
-	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
-		return "", fmt.Errorf("failed to read file header: %w", err)
+func (s *Storage) SaveImage(reader io.Reader, _ string) (*SavedImage, error) {
+	data, err := io.ReadAll(io.LimitReader(reader, s.maxSizeBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read image: %w", err)
 	}
-	if n == 0 {
-		return "", ErrEmptyFile
+	if len(data) == 0 {
+		return nil, ErrEmptyFile
+	}
+	if int64(len(data)) > s.maxSizeBytes {
+		return nil, ErrFileTooLarge
 	}
 
-	mimeType := http.DetectContentType(buf[:n])
+	headerLen := len(data)
+	if headerLen > 512 {
+		headerLen = 512
+	}
+	mimeType := http.DetectContentType(data[:headerLen])
 	var ext string
 	switch {
 	case strings.HasPrefix(mimeType, "image/jpeg"):
 		ext = ".jpg"
 	case strings.HasPrefix(mimeType, "image/png"):
 		ext = ".png"
-	case strings.HasPrefix(mimeType, "image/webp"):
-		ext = ".webp"
 	default:
-		// Also inspect file extension as fallback if sniffing was ambiguous
-		origExt := strings.ToLower(filepath.Ext(originalFilename))
-		if origExt == ".jpg" || origExt == ".jpeg" {
-			ext = ".jpg"
-		} else if origExt == ".png" {
-			ext = ".png"
-		} else if origExt == ".webp" {
-			ext = ".webp"
-		} else {
-			return "", ErrInvalidFileType
-		}
+		return nil, ErrInvalidFileType
 	}
 
-	// Prepare safe output filename
-	filename := fmt.Sprintf("report_%s%s", uuid.New().String(), ext)
-	dstPath := filepath.Join(s.baseDir, filename)
-
-	dst, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	config, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || config.Width < 1 || config.Height < 1 || config.Width > 12000 || config.Height > 12000 ||
+		int64(config.Width)*int64(config.Height) > 16_000_000 {
+		return nil, errors.New("image is invalid or exceeds supported dimensions")
+	}
+	decoded, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
-		return "", fmt.Errorf("failed to create destination file: %w", err)
-	}
-	defer dst.Close()
-
-	// Write the initial sniffed bytes
-	if _, err := dst.Write(buf[:n]); err != nil {
-		os.Remove(dstPath)
-		return "", err
+		return nil, fmt.Errorf("corrupted image data: %w", err)
 	}
 
-	// Copy the remainder with a LimitedReader to enforce maxSizeBytes
-	limitedReader := io.LimitReader(reader, s.maxSizeBytes-int64(n)+1)
-	written, err := io.Copy(dst, limitedReader)
+	id := uuid.NewString()
+	originalFilename := "report_" + id + ext
+	originalPath := filepath.Join(s.baseDir, "originals", originalFilename)
+	if err := os.WriteFile(originalPath, data, 0600); err != nil {
+		return nil, fmt.Errorf("failed to preserve original image: %w", err)
+	}
+	previewFilename := originalFilename
+	previewPath := filepath.Join(s.baseDir, "public", "reports", previewFilename)
+	preview, err := os.OpenFile(previewPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 	if err != nil {
-		os.Remove(dstPath)
-		return "", fmt.Errorf("failed to write upload content: %w", err)
+		_ = os.Remove(originalPath)
+		return nil, fmt.Errorf("failed to create display image: %w", err)
 	}
-
-	totalWritten := int64(n) + written
-	if totalWritten > s.maxSizeBytes {
-		os.Remove(dstPath)
-		return "", ErrFileTooLarge
+	if ext == ".jpg" {
+		err = jpeg.Encode(preview, decoded, &jpeg.Options{Quality: 82})
+	} else {
+		err = (&png.Encoder{CompressionLevel: png.BestSpeed}).Encode(preview, decoded)
 	}
-
-	// Reopen and verify valid image decoding
-	if ext == ".jpg" || ext == ".png" {
-		checkFile, err := os.Open(dstPath)
-		if err == nil {
-			_, _, decodeErr := image.DecodeConfig(checkFile)
-			checkFile.Close()
-			if decodeErr != nil {
-				os.Remove(dstPath)
-				return "", fmt.Errorf("corrupted image data: %w", decodeErr)
-			}
+	if err == nil {
+		err = preview.Sync()
+	}
+	closeErr := preview.Close()
+	if err != nil || closeErr != nil {
+		_ = os.Remove(previewPath)
+		_ = os.Remove(originalPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create display image: %w", err)
 		}
+		return nil, fmt.Errorf("failed to close display image: %w", closeErr)
 	}
-
-	// Return public URL relative to web root
-	return "/uploads/" + filename, nil
+	hash := sha256.Sum256(data)
+	return &SavedImage{
+		Path:              "/uploads/reports/" + previewFilename,
+		OriginalReference: "originals/" + originalFilename,
+		MIMEType:          mimeType,
+		Size:              int64(len(data)),
+		SHA256:            hex.EncodeToString(hash[:]),
+	}, nil
 }
 
-// DeleteFile removes an uploaded file by its public path
+// DeleteFile removes the public preview and its paired private original.
 func (s *Storage) DeleteFile(publicPath string) error {
 	filename := filepath.Base(publicPath)
-	fullPath := filepath.Join(s.baseDir, filename)
-	return os.Remove(fullPath)
+	if !strings.HasPrefix(filename, "report_") || (filepath.Ext(filename) != ".jpg" && filepath.Ext(filename) != ".png") {
+		return errors.New("invalid stored image reference")
+	}
+	previewPath := filepath.Join(s.baseDir, "public", "reports", filename)
+	originalPath := filepath.Join(s.baseDir, "originals", filename)
+	previewErr := os.Remove(previewPath)
+	originalErr := os.Remove(originalPath)
+	if previewErr != nil && !errors.Is(previewErr, os.ErrNotExist) {
+		return previewErr
+	}
+	if originalErr != nil && !errors.Is(originalErr, os.ErrNotExist) {
+		return originalErr
+	}
+	return nil
 }

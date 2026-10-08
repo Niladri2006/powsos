@@ -53,7 +53,6 @@
       localStorage.removeItem(USER_KEY);
     }
 
-    // Common request dispatcher
     async request(path, options = {}) {
       const url = path.startsWith('/api') || path.startsWith('/health') || path.startsWith('/ready')
         ? path
@@ -61,10 +60,9 @@
 
       const headers = options.headers || {};
       if (this.token && !headers['Authorization']) {
-        headers['Authorization'] = `Bearer ${this.token}`;
+        headers['Authorization'] = 'Bearer ' + this.token;
       }
 
-      // If body is not FormData, default to application/json
       if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) {
         headers['Content-Type'] = 'application/json';
       }
@@ -75,11 +73,8 @@
           headers
         });
 
-        if (response.status === 401) {
-          // If token expired or unauthorized, clear session
-          if (this.token && path.includes('/auth/me')) {
-            this.clearSession();
-          }
+        if (response.status === 401 && this.token && path.includes('/auth/me')) {
+          this.clearSession();
         }
 
         const contentType = response.headers.get('content-type') || '';
@@ -95,13 +90,14 @@
           const err = new Error(errObj.message || 'API request failed');
           err.code = errObj.code || 'HTTP_ERROR';
           err.status = response.status;
+          err.details = data;
           throw err;
         }
 
         return data;
       } catch (err) {
         if (err.name === 'TypeError' && err.message.includes('fetch')) {
-          const netErr = new Error('PawSOS server connection unavailable. Please check your internet or local server.');
+          const netErr = new Error('PawSOS could not connect. Check your internet connection and try again.');
           netErr.code = 'NETWORK_ERROR';
           throw netErr;
         }
@@ -109,7 +105,6 @@
       }
     }
 
-    // Health
     async checkHealth() {
       return this.request('/health', { method: 'GET' });
     }
@@ -118,7 +113,6 @@
       return this.request('/ready', { method: 'GET' });
     }
 
-    // Authentication
     async login(email, password) {
       const res = await this.request('/auth/login', {
         method: 'POST',
@@ -149,7 +143,8 @@
         localStorage.setItem(USER_KEY, JSON.stringify(user));
         return user;
       } catch (err) {
-        return null;
+        if (err.status === 401) return null;
+        throw err;
       }
     }
 
@@ -157,7 +152,6 @@
       this.clearSession();
     }
 
-    // Reports
     async getReports(params = {}) {
       const q = new URLSearchParams();
       if (params.status && params.status !== 'all') q.set('status', params.status);
@@ -165,6 +159,9 @@
       if (params.search) q.set('search', params.search);
       if (params.limit) q.set('limit', params.limit);
       if (params.offset) q.set('offset', params.offset);
+      if (Number.isFinite(params.latitude)) q.set('latitude', params.latitude);
+      if (Number.isFinite(params.longitude)) q.set('longitude', params.longitude);
+      if (Number.isFinite(params.radiusKm)) q.set('radius_km', params.radiusKm);
 
       const qs = q.toString() ? `?${q.toString()}` : '';
       return this.request(`/reports${qs}`, { method: 'GET' });
@@ -187,12 +184,12 @@
           method: 'POST',
           body: formData
         });
-      } else {
-        return this.request('/reports', {
-          method: 'POST',
-          body: JSON.stringify(data)
-        });
       }
+
+      return this.request('/reports', {
+        method: 'POST',
+        body: JSON.stringify(data)
+      });
     }
 
     async assignReport(id, responderInfo) {
@@ -223,6 +220,21 @@
 
     async getStats() {
       return this.request('/stats', { method: 'GET' });
+    }
+
+    async applyAsResponder(application = {}) {
+      return this.request('/responders/application', { method: 'POST', body: JSON.stringify(application) });
+    }
+
+    async getPendingResponders() {
+      return this.request('/responders/pending', { method: 'GET' });
+    }
+
+    async setResponderVerification(id, verified) {
+      return this.request(`/responders/${encodeURIComponent(id)}/verification`, {
+        method: 'POST',
+        body: JSON.stringify({ verified })
+      });
     }
 
     getExportUrl() {

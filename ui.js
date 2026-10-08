@@ -113,16 +113,26 @@ function showToast(message, type = 'info', duration = 4000) {
 
   const toast = document.createElement('div');
   toast.className = `toast-item ${type}`;
+  toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+  toast.setAttribute('aria-atomic', 'true');
 
   let icon = 'ℹ️';
   if (type === 'success') icon = '✓';
   else if (type === 'error') icon = '⚠️';
 
-  toast.innerHTML = `
-    <span style="font-weight: 700; font-size: 1.05rem;">${icon}</span>
-    <span style="flex: 1;">${message}</span>
-    <button style="background: none; border: none; color: inherit; opacity: 0.7; cursor: pointer; font-size: 1rem; padding: 0 4px;" onclick="this.parentElement.remove()">✕</button>
-  `;
+  const iconEl = document.createElement('span');
+  iconEl.style.cssText = 'font-weight:700;font-size:1.05rem';
+  iconEl.textContent = icon;
+  const messageEl = document.createElement('span');
+  messageEl.style.flex = '1';
+  messageEl.textContent = message;
+  const closeButton = document.createElement('button');
+  closeButton.type = 'button';
+  closeButton.setAttribute('aria-label', 'Dismiss notification');
+  closeButton.style.cssText = 'background:none;border:0;color:inherit;opacity:.7;cursor:pointer;font-size:1rem;padding:0 4px';
+  closeButton.textContent = '✕';
+  closeButton.addEventListener('click', () => toast.remove());
+  toast.append(iconEl, messageEl, closeButton);
 
   shelf.appendChild(toast);
 

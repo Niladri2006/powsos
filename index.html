@@ -4,10 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PawSOS — Animal Emergency & Rescue Coordination</title>
-  <meta name="description" content="Report injured, sick, or distressed animals to local volunteer responders and animal welfare organizations in real time.">
+  <meta name="description" content="Report an animal in distress with its location and photo, find nearby reports, and check status updates recorded by responders.">
   
   <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 </head>
 <body>
 
@@ -20,7 +19,7 @@
       <div>
         <div class="hero-eyebrow">
           <span>🐾</span>
-          <span>Community Animal Welfare Network</span>
+          <span>Community animal reporting</span>
         </div>
 
         <h1 class="hero-clean-title">
@@ -28,7 +27,7 @@
         </h1>
 
         <p class="hero-clean-lead">
-          Report injured, sick, or trapped street animals in your area. PawSOS notifies nearby verified volunteers, rescue groups, and animal ambulances so care can arrive quickly.
+          Report an animal in under a minute. Share its location and a photo so nearby visitors and verified responders can see what is happening.
         </p>
 
         <div class="hero-btn-group">
@@ -38,15 +37,14 @@
           <a href="track.html" class="btn btn-secondary btn-lg">
             <span>🔍 Track a Report</span>
           </a>
-          <a href="map.html" class="btn btn-subtle btn-lg">
-            <span>View Active Reports →</span>
+          <a href="#nearby" class="btn btn-subtle btn-lg">
+            <span>Find Help Near Me →</span>
           </a>
         </div>
 
         <div style="display: flex; align-items: center; gap: 1.5rem; font-size: 0.85rem; color: var(--text-muted); flex-wrap: wrap;">
-          <span>✓ 100% Free public service</span>
-          <span>✓ Real-time map location</span>
-          <span>✓ Direct volunteer coordination</span>
+          <span>Location is used only when you request it.</span>
+          <span>Reporter contact stays private until a verified responder accepts.</span>
         </div>
       </div>
 
@@ -66,7 +64,7 @@
         <div>
           <h4 style="font-size: 0.95rem; margin-bottom: 0.25rem;">Severe Life-Threatening Emergency?</h4>
           <p style="font-size: 0.88rem; margin: 0;">
-            If the animal is in critical shock or heavy arterial bleeding and you can transport, call nearest clinic or dial <a href="tel:1962" style="font-weight: 700; color: var(--emergency-red);">1962</a> immediately.
+            If there is immediate danger, contact a local veterinary or animal rescue service directly if you can do so safely. PawSOS is not an emergency dispatch service.
           </p>
         </div>
       </div>
@@ -76,7 +74,7 @@
         <div>
           <h4 style="font-size: 0.95rem; margin-bottom: 0.25rem;">Need Community Rescue Assistance?</h4>
           <p style="font-size: 0.88rem; margin: 0;">
-            Use our <a href="report.html" style="font-weight: 700;">online reporting form</a> to share photo, exact location, and condition so local responders can mobilize.
+            Use our <a href="report.html" style="font-weight: 700;">online reporting form</a> to share the animal's condition, a photo, and where it was seen.
           </p>
         </div>
       </div>
@@ -90,7 +88,7 @@
         <div class="section-eyebrow">Clear Process</div>
         <h2 class="section-title">How Animal Rescue Reporting Works</h2>
         <p class="section-desc">
-          We connect people on the ground with rescue volunteers in their locality without lost WhatsApp forwards.
+          Public reports can be viewed by nearby visitors and verified responders. PawSOS does not send automatic dispatch notifications.
         </p>
       </div>
 
@@ -99,15 +97,15 @@
           <div class="step-num">1</div>
           <h3>Submit Incident Details</h3>
           <p>
-            Select animal type, indicate whether the situation is critical, take a quick photo, and confirm your location on the map.
+            Choose what happened, the animal type, and how serious it appears. PawSOS does not diagnose animals.
           </p>
         </div>
 
         <div class="step-item">
           <div class="step-num">2</div>
-          <h3>Local Responders Notified</h3>
+          <h3>Report Recorded</h3>
           <p>
-            Your report is sent to verified community volunteers and animal welfare groups operating within that neighborhood.
+            The report is saved and appears in the nearby reports list. PawSOS does not currently send push alerts.
           </p>
         </div>
 
@@ -115,7 +113,7 @@
           <div class="step-num">3</div>
           <h3>Volunteer Accepts Case</h3>
           <p>
-            A responder acknowledges the alert, provides an estimated arrival time, and prepares appropriate transport or first aid.
+            A verified responder who checks the queue can accept the case and record an ETA if they have one.
           </p>
         </div>
 
@@ -123,10 +121,35 @@
           <div class="step-num">4</div>
           <h3>Care & Status Updates</h3>
           <p>
-            Follow your report online with your reference ID to see when help arrives and the animal is admitted to veterinary care.
+            Follow your report by reference code to see status changes and field notes that responders actually record.
           </p>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- Animals Near Me -->
+  <section id="nearby" class="section" style="background: var(--bg-surface); border-top: 1px solid var(--border-light);">
+    <div class="container">
+      <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+        <div>
+          <div class="section-eyebrow">Animals Near Me</div>
+          <h2 class="section-title" style="margin-bottom: 0.25rem;">Reports close to your location</h2>
+        </div>
+        <div style="display:flex; gap:.6rem; align-items:center; flex-wrap:wrap;">
+          <label for="nearby-radius" class="visually-hidden">Nearby search radius</label>
+          <select class="form-control" id="nearby-radius" style="width:auto; min-width:5.5rem;">
+            <option value="1">1 km</option>
+            <option value="3">3 km</option>
+            <option value="5" selected>5 km</option>
+            <option value="10">10 km</option>
+          </select>
+          <a href="map.html" class="btn btn-secondary btn-sm">Open map</a>
+          <button type="button" class="btn btn-secondary btn-sm" id="nearby-location-btn">📍 Use My Location</button>
+        </div>
+      </div>
+      <p id="nearby-cases-status" role="status" aria-live="polite" style="font-size:.9rem;color:var(--text-secondary);"></p>
+      <div id="nearby-cases-list" class="cases-grid"></div>
     </div>
   </section>
 
@@ -203,7 +226,7 @@
         Are you an animal welfare volunteer or rescuer?
       </h2>
       <p style="color: var(--text-secondary); font-size: 1.05rem; margin-bottom: 1.75rem;">
-        Join our verified local responder network. Receive notifications when an animal needs rescue or transport in your neighborhood.
+        Apply to be reviewed as a responder. Verified responders can review current cases and record updates; PawSOS does not send automatic dispatch notifications.
       </p>
       <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
         <a href="about.html#volunteer" class="btn btn-primary btn-lg">Register as Volunteer</a>
@@ -270,7 +293,6 @@
   </footer>
 
   <!-- Scripts -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="js/api.js"></script>
   <script src="js/sound.js"></script>
   <script src="js/store.js"></script>
@@ -278,15 +300,98 @@
   <script src="js/ui.js"></script>
 
   <script>
+    let nearbyPosition = null;
+    let nearbyRequest = 0;
+
     document.addEventListener('DOMContentLoaded', () => {
       renderRecentCases();
+      renderNearbyReports();
+
+      const nearbyBtn = document.getElementById('nearby-location-btn');
+      if (nearbyBtn) nearbyBtn.addEventListener('click', requestNearbyReports);
+      const radiusSelect = document.getElementById('nearby-radius');
+      if (radiusSelect) radiusSelect.addEventListener('change', renderNearbyReports);
 
       if (window.pawStore) {
         window.pawStore.subscribe(() => {
           renderRecentCases();
+          renderNearbyReports();
         });
       }
     });
+
+    async function renderNearbyReports() {
+      const list = document.getElementById('nearby-cases-list');
+      const status = document.getElementById('nearby-cases-status');
+      if (!list || !window.pawStore) return;
+      if (!nearbyPosition) {
+        status.textContent = 'Your location is only used when you choose “Use My Location”; PawSOS does not track you continuously.';
+        list.innerHTML = '<div style="grid-column:1/-1;padding:1.25rem;text-align:center;color:var(--text-muted);">Allow location access to find active reports near you.</div>';
+        return;
+      }
+      const requestId = ++nearbyRequest;
+      const radius = Number(document.getElementById('nearby-radius').value) || 5;
+      status.textContent = 'Finding active reports near your selected location…';
+      list.innerHTML = '';
+      let cases;
+      try {
+        cases = await window.pawStore.getNearbyCases(nearbyPosition.lat, nearbyPosition.lng, radius);
+      } catch (err) {
+        if (requestId !== nearbyRequest) return;
+        status.textContent = err.message || 'Nearby reports could not be loaded. Check your connection and try again.';
+        list.innerHTML = '';
+        return;
+      }
+      if (requestId !== nearbyRequest) return;
+      status.textContent = cases.length === 100
+        ? `Showing 100 active reports within ${radius} km. More recent reports may be available beyond this page.`
+        : `${cases.length} active report${cases.length === 1 ? '' : 's'} within ${radius} km.`;
+      if (!cases.length) {
+        list.innerHTML = '<div style="grid-column:1/-1;padding:1.25rem;text-align:center;color:var(--text-muted);">Nothing reported nearby right now.</div>';
+        return;
+      }
+
+      list.innerHTML = cases.slice(0, 3).map(c => {
+        const escape = window.pawEscapeHTML;
+        const d = c.distanceKm !== null ? (c.distanceKm < 1 ? `${Math.round(c.distanceKm * 1000)} m away` : `${c.distanceKm.toFixed(1)} km away`) : 'Nearby';
+        const image = c.photo
+          ? `<img src="${escape(c.photo)}" alt="${escape(c.animalName)}">`
+          : '<div class="case-card-no-photo" aria-hidden="true">🐾</div>';
+        return `
+          <div class="case-card">
+            <div class="case-card-thumb">
+              ${image}
+              <div class="case-card-badges">
+                <span class="badge ${c.urgency === 'critical' ? 'badge-emergency' : (c.urgency === 'urgent' ? 'badge-urgent' : 'badge-neutral')}">${escape(c.urgency)}</span>
+              </div>
+            </div>
+            <div class="case-card-content">
+              <div class="case-meta-line"><span style="font-family:var(--font-mono);font-weight:700;">#${escape(c.id)}</span><span>•</span><span>${escape(d)}</span></div>
+              <h3 class="case-card-title">${escape(c.animalName)}</h3>
+              <p class="case-card-summary">${escape(c.condition)}</p>
+              <div class="case-location-row"><span>📍</span><span>${escape(c.location.area || c.location.city || 'Approximate area')}</span><span>•</span><span>${escape(timeAgo(c.createdAt))}</span></div>
+              <div class="case-card-actions"><a href="case.html?id=${encodeURIComponent(c.id)}" class="btn btn-secondary btn-sm" style="flex:1;">Track status</a></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function requestNearbyReports() {
+      const status = document.getElementById('nearby-cases-status');
+      if (!window.pawMap || !navigator.geolocation) {
+        if (status) status.textContent = 'Location is unavailable in this browser. You can still open the map or browse recent reports.';
+        return;
+      }
+
+      window.pawMap.getCurrentLocation((pos) => {
+        nearbyPosition = { lat: pos.lat, lng: pos.lng };
+        renderNearbyReports();
+      }, (errMsg) => {
+        if (status) status.textContent = errMsg;
+        showToast(errMsg, 'error');
+      });
+    }
 
     function renderRecentCases() {
       const grid = document.getElementById('recent-cases-grid');
@@ -294,11 +399,12 @@
 
       const cases = window.pawStore.getAllCases().slice(0, 3); // Top 3 recent
       if (cases.length === 0) {
-        grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 2rem; color: var(--text-muted);">No active cases reported in this area.</div>';
+        grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:2rem;color:var(--text-muted);">No reports have been submitted yet.</div>';
         return;
       }
 
       grid.innerHTML = cases.map(c => {
+        const escape = window.pawEscapeHTML;
         let badgeClass = 'badge-neutral';
         if (c.urgency === 'critical') badgeClass = 'badge-emergency';
         else if (c.urgency === 'urgent') badgeClass = 'badge-urgent';
@@ -312,7 +418,7 @@
         return `
           <div class="case-card">
             <div class="case-card-thumb">
-              <img src="${c.photo || 'assets/dog-sample.jpg'}" alt="${c.animalName}" onerror="this.src='assets/dog-sample.jpg'">
+              ${c.photo ? `<img src="${escape(c.photo)}" alt="${escape(c.animalName)}">` : '<div class="case-card-no-photo" aria-hidden="true">🐾</div>'}
               <div class="case-card-badges">
                 <span class="badge ${badgeClass}">${c.urgency}</span>
                 <span class="badge ${statusBadge}">${statusText}</span>
@@ -321,21 +427,21 @@
 
             <div class="case-card-content">
               <div class="case-meta-line">
-                <span style="font-family: var(--font-mono); font-weight: 700;">#${c.id}</span>
+                <span style="font-family:var(--font-mono);font-weight:700;">#${escape(c.id)}</span>
                 <span>•</span>
                 <span>${timeAgo(c.createdAt)}</span>
               </div>
 
-              <h3 class="case-card-title">${c.animalName}</h3>
-              <p class="case-card-summary">${c.condition}</p>
+              <h3 class="case-card-title">${escape(c.animalName)}</h3>
+              <p class="case-card-summary">${escape(c.condition)}</p>
 
               <div class="case-location-row">
                 <span>📍</span>
-                <span>${c.location ? c.location.area || c.location.city : 'Local Area'}</span>
+                <span>${escape(c.location ? c.location.area || c.location.city || 'Approximate area' : 'Approximate area')}</span>
               </div>
 
               <div class="case-card-actions">
-                <a href="case.html?id=${c.id}" class="btn btn-secondary btn-sm" style="flex: 1;">
+                <a href="case.html?id=${encodeURIComponent(c.id)}" class="btn btn-secondary btn-sm" style="flex: 1;">
                   Track Status
                 </a>
                 <a href="map.html" class="btn btn-subtle btn-sm">

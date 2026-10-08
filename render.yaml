@@ -2,10 +2,10 @@ services:
   - type: web
     name: pawsos
     runtime: docker
-    plan: starter
-    dockerfilePath: ./Dockerfile
+    plan: free
+    dockerfilePath: ./Dockerfile.render
     dockerContext: .
-    healthCheckPath: /health
+    healthCheckPath: /ready
     envVars:
       - key: PORT
         value: "8080"
@@ -16,16 +16,16 @@ services:
       - key: DB_DRIVER
         value: sqlite
       - key: DB_SOURCE
-        value: /app/data/pawsos.db
+        value: /tmp/pawsos.db
       - key: STORAGE_DIR
-        value: /app/data
+        value: /tmp/uploads
       - key: MAX_UPLOAD_SIZE_MB
         value: "5"
       - key: CORS_ALLOWED_ORIGIN
-        value: "*"
+        value: https://powsos.onrender.com
       - key: JWT_SECRET
         generateValue: true
-    disk:
-      name: pawsos-data
-      mountPath: /app/data
-      sizeGB: 1
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false

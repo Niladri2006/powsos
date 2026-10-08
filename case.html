@@ -129,8 +129,13 @@
         
         <!-- Photo Frame -->
         <div style="background: #e2e8f0; border-radius: var(--radius-md); overflow: hidden; margin-bottom: 1.5rem; height: 320px; border: 1px solid var(--border-light);">
-          <img id="case-photo-img" src="assets/dog-sample.jpg" alt="Reported Animal" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='assets/dog-sample.jpg'">
+          <img id="case-photo-img" alt="Photo submitted with the report" style="width:100%;height:100%;object-fit:cover;" hidden>
+          <div id="case-photo-placeholder" style="height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-muted);">No photo was submitted.</div>
         </div>
+        <section id="case-evidence-card" class="card" style="padding:1rem;margin-bottom:1.5rem;" aria-labelledby="case-evidence-heading" hidden>
+          <h3 id="case-evidence-heading" style="font-size:1rem;margin-bottom:.5rem;">Photo evidence</h3>
+          <p id="case-evidence-summary" style="margin:0;font-size:.85rem;color:var(--text-secondary);"></p>
+        </section>
 
         <!-- Incident Summary Card -->
         <div class="card" style="margin-bottom: 1.5rem;">
@@ -141,39 +146,39 @@
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
             <div>
               <div style="font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase;">Animal Species</div>
-              <div style="font-weight: 700; font-size: 0.95rem;" id="case-species-text">Dog (Indie)</div>
+              <div style="font-weight: 700; font-size: 0.95rem;" id="case-species-text">              Loading report…</div>
             </div>
             <div>
               <div style="font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase;">Logged At</div>
-              <div style="font-weight: 600; font-size: 0.95rem;" id="case-logged-time">Just now</div>
+              <div style="font-weight: 600; font-size: 0.95rem;" id="case-logged-time">              Loading…</div>
             </div>
           </div>
 
           <div style="margin-bottom: 1rem;">
             <div style="font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.2rem;">Distress Condition</div>
             <div style="font-size: 0.95rem; font-weight: 600; color: var(--emergency-red);" id="case-condition-text">
-              Road accident impact. Suspected front left leg fracture.
+              Loading report…
             </div>
           </div>
 
           <div style="margin-bottom: 1rem;">
             <div style="font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.2rem;">Scene & Identification Notes</div>
             <p style="font-size: 0.9rem; color: var(--text-secondary); margin: 0; line-height: 1.5;" id="case-description-text">
-              Found lying beside the pavement near traffic signal. Responsive but in visible pain.
+              No scene notes provided.
             </p>
           </div>
 
           <div style="margin-bottom: 1rem;">
             <div style="font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.2rem;">Reported Location</div>
             <div style="font-size: 0.9rem; font-weight: 600;" id="case-location-address">
-              Address provided
+              Location loading…
             </div>
           </div>
 
           <div style="border-top: 1px solid var(--border-light); padding-top: 0.75rem;">
             <div style="font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.2rem;">Reporter Contact</div>
             <div style="font-size: 0.9rem;" id="case-reporter-info">
-              <span>Citizen</span>
+              Reporter details are restricted to the responder assigned to this case.
             </div>
           </div>
         </div>
@@ -184,6 +189,7 @@
             <h4 style="font-size: 0.95rem; margin: 0;">📍 Location on Map</h4>
             <a href="map.html" style="font-size: 0.8rem; color: var(--brand-primary); font-weight: 600;">View Area Map →</a>
           </div>
+          <p id="case-map-privacy-note" style="font-size:.8rem;margin-bottom:.75rem;">Public map location is approximate.</p>
           <div class="map-canvas" id="case-detail-map" style="height: 240px;"></div>
         </div>
 
@@ -191,7 +197,7 @@
         <div class="card">
           <h3 style="font-size: 1.15rem; margin-bottom: 0.5rem;">Rescue Progress Log</h3>
           <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem;">
-            Real-time updates posted by responders and the reporter.
+            Recorded status changes and field notes. This page refreshes the case status periodically.
           </p>
 
           <div class="timeline-stream" id="case-timeline-stream">
@@ -199,7 +205,7 @@
           </div>
 
           <!-- Add Note Form -->
-          <div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border-light);">
+          <div id="case-note-form" style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--border-light);" hidden>
             <label class="form-label" for="add-note-input" style="font-size: 0.88rem;">
               Post a scene update or comment:
             </label>
@@ -248,14 +254,23 @@
           </p>
 
           <div style="display: flex; flex-direction: column; gap: 0.6rem;">
-            <button class="btn btn-secondary btn-block btn-sm" onclick="setQuickStatus('in_progress', 'Volunteer arrived on scene. Assessing animal.')">
-              📍 Mark 'Arrived on Scene'
+            <button class="btn btn-secondary btn-block btn-sm" onclick="setQuickStatus('on_the_way')">
+              🚗 Start travel
             </button>
-            <button class="btn btn-secondary btn-block btn-sm" onclick="setQuickStatus('in_progress', 'Transporting animal to veterinary clinic for treatment.')">
-              🚑 Mark 'Transporting to Clinic'
+            <button class="btn btn-secondary btn-block btn-sm" onclick="setQuickStatus('arrived')">
+              📍 Mark arrived
             </button>
-            <button class="btn btn-primary btn-block btn-sm" onclick="setQuickStatus('resolved', 'Animal received medical care, stabilized, and safely sheltered.')">
-              ✓ Mark 'Rescue Resolved'
+            <button class="btn btn-secondary btn-block btn-sm" onclick="setQuickStatus('animal_secured')">
+              ✓ Animal secured
+            </button>
+            <button class="btn btn-secondary btn-block btn-sm" onclick="setQuickStatus('transporting')">
+              🚑 Transporting
+            </button>
+            <button class="btn btn-secondary btn-block btn-sm" onclick="setQuickStatus('at_vet')">
+              🏥 At veterinary care
+            </button>
+            <button class="btn btn-primary btn-block btn-sm" onclick="setQuickStatus('resolved')">
+              Resolve case
             </button>
           </div>
         </div>
@@ -276,15 +291,16 @@
 
       <div class="form-group">
         <label class="form-label">Your Name</label>
-        <input type="text" class="form-control" id="acc-responder-name" value="Rahul Sharma">
+        <input type="text" class="form-control" id="acc-responder-name" readonly hidden>
       </div>
 
       <div class="form-group">
         <label class="form-label">Estimated Arrival Time</label>
         <select class="form-control" id="acc-responder-eta">
-          <option value="~10 mins">~10 Minutes (Nearby)</option>
-          <option value="~20 mins" selected>~20 Minutes (In Transit)</option>
-          <option value="~35 mins">~35 Minutes (Arranging Vehicle)</option>
+          <option value="" selected>Not known yet</option>
+          <option value="10 minutes">10 minutes</option>
+          <option value="20 minutes">20 minutes</option>
+          <option value="35 minutes">35 minutes</option>
         </select>
       </div>
 
@@ -306,15 +322,13 @@
   <script>
     let activeCase = null;
     let detailMap = null;
+    let detailMarker = null;
 
     document.addEventListener('DOMContentLoaded', async () => {
       await loadCase();
-
-      if (window.pawStore) {
-        window.pawStore.subscribe(() => {
-          loadCase(false);
-        });
-      }
+      setInterval(() => {
+        if (document.visibilityState === 'visible') loadCase(false);
+      }, 30000);
     });
 
     function getParam(param) {
@@ -325,27 +339,32 @@
     async function loadCase(renderMap = true) {
       if (!window.pawStore) return;
 
-      const caseId = getParam('id') || 'PAW-4812';
-      activeCase = window.pawStore.getCaseById(caseId);
-
-      if (!activeCase && window.pawStore.fetchFreshCaseById) {
+      const caseId = getParam('id');
+      if (!caseId) {
+        showCaseNotFound();
+        return;
+      }
+      try {
         activeCase = await window.pawStore.fetchFreshCaseById(caseId);
+      } catch (error) {
+        showCaseNotFound(error);
+        return;
       }
 
       if (!activeCase) {
-        // Fallback to first available
-        activeCase = window.pawStore.getAllCases()[0];
+        showCaseNotFound();
+        return;
       }
 
-      if (!activeCase) {
+      function showCaseNotFound(error) {
+        const notFound = error && error.status === 404;
         document.querySelector('main').innerHTML = `
           <div class="card" style="text-align: center; padding: 3rem;">
-            <h2>Case Not Found</h2>
-            <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">The requested report reference does not exist or has been removed.</p>
+            <h2>${notFound ? 'Report not found' : 'Report could not be checked'}</h2>
+            <p style="color:var(--text-secondary);margin-bottom:1.5rem;">${notFound ? 'Check the reference code and try again.' : 'The connection may be unavailable. This page has not confirmed the latest report status.'}</p>
             <a href="track.html" class="btn btn-primary">Go to Case Lookup</a>
           </div>
         `;
-        return;
       }
 
       renderCaseUI();
@@ -368,15 +387,32 @@
       const repEl = document.getElementById('case-reporter-info');
       if (repEl) {
         const rep = c.reporter || {};
-        repEl.innerHTML = `
-          <strong>${rep.name || 'Citizen'}</strong>
-          ${rep.phone ? `<span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 0.5rem;">(${rep.phone})</span>` : ''}
-        `;
+        repEl.textContent = rep.phone
+          ? `${rep.name || 'Reporter'} · ${rep.phone}`
+          : 'Reporter details are restricted to the responder assigned to this case.';
       }
 
+      const photo = document.getElementById('case-photo-img');
+      const photoPlaceholder = document.getElementById('case-photo-placeholder');
       if (c.photo) {
-        document.getElementById('case-photo-img').src = c.photo;
+        photo.src = c.photo;
+        photo.hidden = false;
+        photoPlaceholder.hidden = true;
+      } else {
+        photo.hidden = true;
+        photoPlaceholder.hidden = false;
       }
+      renderEvidence(c.evidence, c.photo, c.location);
+      const canManage = canManageCase(c);
+      document.getElementById('volunteer-actions-card').hidden = !canManage;
+      document.getElementById('case-note-form').hidden = !canManage;
+
+      const locationLabel = document.getElementById('case-location-address');
+      locationLabel.textContent = c.location.address || c.location.area || c.location.city || 'Approximate location shown on map';
+      const mapNotice = document.getElementById('case-map-privacy-note');
+      if (mapNotice) mapNotice.textContent = canManage
+        ? 'Exact operational location is available to verified responders.'
+        : 'The public map pin is approximate to protect the reporter and animal.';
 
       // Urgency Badge
       const urgBadge = document.getElementById('case-urgency-badge');
@@ -412,77 +448,151 @@
         n.classList.remove('completed', 'active');
       });
 
-      if (status === 'reported') {
-        n1.classList.add('active');
-      } else if (status === 'assigned') {
-        n1.classList.add('completed');
-        n2.classList.add('active');
-      } else if (status === 'in_progress') {
-        n1.classList.add('completed');
-        n2.classList.add('completed');
-        n3.classList.add('active');
-      } else if (status === 'resolved') {
-        n1.classList.add('completed');
-        n2.classList.add('completed');
-        n3.classList.add('completed');
-        n4.classList.add('completed');
-      }
+      const events = timeline || [];
+      const accepted = events.find(entry => entry.status === 'assigned');
+      const reached = events.find(entry => ['arrived', 'animal_secured', 'transporting', 'at_vet', 'in_progress'].includes(entry.status));
+      const resolved = events.find(entry => entry.status === 'resolved');
+      n1.classList.add('completed');
+      n2.classList.add(accepted ? 'completed' : 'active');
+      if (reached) n3.classList.add('completed');
+      else if (accepted) n3.classList.add('active');
+      if (resolved) n4.classList.add('completed');
+      else if (reached) n4.classList.add('active');
+      document.getElementById('step-time-reported').textContent = events[0] ? timeAgo(events[0].time) : 'Recorded';
+      document.getElementById('step-time-assigned').textContent = accepted ? timeAgo(accepted.created_at || accepted.time) : 'Not accepted yet';
+      document.getElementById('step-time-inprogress').textContent = reached ? timeAgo(reached.created_at || reached.time) : 'No arrival recorded';
+      document.getElementById('step-time-resolved').textContent = resolved ? timeAgo(resolved.created_at || resolved.time) : 'Not resolved';
     }
 
     function renderTimelineStream(timeline) {
       const stream = document.getElementById('case-timeline-stream');
       if (!stream) return;
 
+      if (!timeline.length) {
+        stream.textContent = 'No status updates have been recorded yet.';
+        return;
+      }
+      const escape = window.pawEscapeHTML;
       stream.innerHTML = timeline.map(t => `
         <div class="timeline-point ${t.status === 'resolved' ? 'resolved' : ''}">
           <div style="font-size: 0.88rem; font-weight: 600; color: var(--text-main); margin-bottom: 2px;">
-            ${t.note}
+            ${escape(t.note || statusLabel(t.status))}
           </div>
           <div style="font-size: 0.78rem; color: var(--text-muted);">
             <span>${timeAgo(t.time)}</span>
-            ${t.author ? `<span> • By ${t.author}</span>` : ''}
+            ${t.author ? `<span> • By ${escape(t.author)}</span>` : ''}
           </div>
         </div>
       `).join('');
     }
 
+    function statusLabel(status) {
+      return ({
+        reported: 'Report submitted',
+        assigned: 'Responder accepted the case',
+        in_progress: 'Responder is working on the case',
+        on_the_way: 'Responder started travel',
+        arrived: 'Responder marked arrival',
+        animal_secured: 'Animal secured',
+        transporting: 'Animal marked as transporting',
+        at_vet: 'Arrival at veterinary care recorded',
+        resolved: 'Case resolved',
+        closed: 'Case closed'
+      })[status] || 'Case status updated';
+    }
+
+    function renderEvidence(evidence, photoURL, locationDetails) {
+      const summary = document.getElementById('case-evidence-summary');
+      const card = document.getElementById('case-evidence-card');
+      if (!evidence) {
+        card.hidden = !photoURL;
+        summary.textContent = photoURL
+          ? 'A photo is attached. Detailed evidence metadata is available only to the assigned verified responder or an administrator.'
+          : 'No photo evidence was attached to this report.';
+        return;
+      }
+      card.hidden = false;
+      const source = evidence.source_type === 'camera' || evidence.source_type === 'camera_option'
+        ? 'Camera option selected; the browser records selection time and report location. The image is not independently verified.'
+        : 'Existing photo uploaded; capture time and original photo location are not verified.';
+      const captured = evidence.capture_timestamp
+        ? `Browser selection time: ${new Date(evidence.capture_timestamp).toLocaleString()}. `
+        : '';
+      const location = Number.isFinite(evidence.latitude) && Number.isFinite(evidence.longitude)
+        ? `Location recorded with report: ${evidence.latitude.toFixed(5)}, ${evidence.longitude.toFixed(5)}${evidence.location_accuracy ? ` (about ${Math.round(evidence.location_accuracy)} m accuracy)` : ''}. `
+        : '';
+      const locationSource = locationDetails && locationDetails.source === 'browser_geolocation'
+        ? 'Report location source: browser geolocation. '
+        : locationDetails && locationDetails.source === 'map_pin'
+          ? 'Report location source: manually placed map pin. '
+          : '';
+      const locationTime = locationDetails && locationDetails.timestamp
+        ? `Location recorded: ${new Date(locationDetails.timestamp).toLocaleString()}. `
+        : '';
+      const uploaded = evidence.upload_timestamp
+        ? `Uploaded: ${new Date(evidence.upload_timestamp).toLocaleString()}. `
+        : '';
+      summary.textContent = `Evidence metadata recorded at upload. ${source} ${captured}${location}${locationSource}${locationTime}${uploaded}Original file: ${evidence.original_filename}. Evidence ID: ${evidence.evidence_id}. SHA-256: ${evidence.sha256}.`;
+      summary.hidden = false;
+    }
+
+    function canManageCase(report) {
+      const user = window.pawAPI && window.pawAPI.getCurrentUser();
+      if (!user || !user.verified) return false;
+      if (user.role === 'admin') return true;
+      return user.role === 'responder' && report.responder && report.responder.id === user.id;
+    }
+
+    function isVerifiedResponder() {
+      const user = window.pawAPI && window.pawAPI.getCurrentUser();
+      return !!(user && user.verified && (user.role === 'responder' || user.role === 'admin'));
+    }
+
     function renderResponderBox(c) {
       const wrap = document.getElementById('responder-content-wrap');
       if (!wrap) return;
+      const escape = window.pawEscapeHTML;
+      const user = window.pawAPI && window.pawAPI.getCurrentUser();
+      const accepted = c.status !== 'reported' || (c.timeline || []).some(entry => entry.status === 'assigned');
+      const navigate = isVerifiedResponder() && c.location && Number.isFinite(c.location.lat) && Number.isFinite(c.location.lng)
+        ? `<a class="btn btn-secondary btn-sm btn-block" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&amp;destination=${encodeURIComponent(`${c.location.lat},${c.location.lng}`)}">Navigate to animal</a>`
+        : '';
 
       if (c.responder) {
         wrap.innerHTML = `
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
             <div>
-              <div style="font-size: 1.05rem; font-weight: 700; color: var(--text-main);">${c.responder.name}</div>
-              <div style="font-size: 0.82rem; color: var(--text-muted);">${c.responder.organization || 'Volunteer Responder'}</div>
+              <div style="font-size:1.05rem;font-weight:700;color:var(--text-main);">${escape(c.responder.name)}</div>
+              <div style="font-size:.82rem;color:var(--text-muted);">Responder accepted this case</div>
             </div>
-            <div>
+            ${c.responder.etaText ? `<div>
               <span class="badge ${c.status === 'resolved' ? 'badge-resolved' : 'badge-urgent'}">
-                ${c.responder.etaText || 'Assigned'}
+                ETA reported: ${escape(c.responder.etaText)}
               </span>
-            </div>
+            </div>` : ''}
           </div>
-
-          <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
-            Vehicle: ${c.responder.vehicle || 'Standard'}
+          ${c.reporter.phone ? `<a class="btn btn-secondary btn-sm btn-block" href="tel:${encodeURIComponent(c.reporter.phone)}">Call reporter</a>` : ''}
+          ${navigate}
+        `;
+      } else if (accepted) {
+        wrap.innerHTML = `
+          <div style="color:var(--text-secondary);font-size:.9rem;margin-bottom:.75rem;">
+            A responder acceptance has been recorded.
           </div>
-
-          ${c.responder.phone ? `
-            <a href="tel:${c.responder.phone}" class="btn btn-secondary btn-sm btn-block">
-              📞 Call Assigned Responder
-            </a>
-          ` : ''}
+          ${c.eta ? `<div style="margin-bottom:.75rem;"><span class="badge badge-urgent">ETA reported: ${escape(c.eta)}</span></div>` : ''}
+          ${navigate}
         `;
       } else {
         wrap.innerHTML = `
           <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-            No volunteer has accepted this dispatch yet. The alert has been sent to nearby members.
+            No responder acceptance has been recorded yet.
           </div>
-          <button class="btn btn-primary btn-sm btn-block" onclick="openAcceptModal()">
-            Accept This Dispatch (Volunteer)
-          </button>
+          ${isVerifiedResponder() ? '<button class="btn btn-primary btn-sm btn-block" onclick="openAcceptModal()">Accept case</button>' : '<a class="btn btn-secondary btn-sm btn-block" href="login.html">Verified responder sign-in</a>'}
+          ${navigate}
         `;
+      }
+      if (user && user.verified && c.responder && c.responder.id !== user.id && user.role !== 'admin') {
+        document.getElementById('volunteer-actions-card').hidden = true;
       }
     }
 
@@ -490,8 +600,9 @@
       const mapBox = document.getElementById('case-detail-map');
       if (!mapBox || typeof L === 'undefined' || !activeCase) return;
 
-      const lat = activeCase.location ? activeCase.location.lat : 26.8928;
-      const lng = activeCase.location ? activeCase.location.lng : 75.7485;
+      const lat = activeCase.location ? activeCase.location.lat : NaN;
+      const lng = activeCase.location ? activeCase.location.lng : NaN;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
       if (!detailMap) {
         detailMap = L.map('case-detail-map', {
@@ -507,8 +618,9 @@
         detailMap.setView([lat, lng], 14);
       }
 
+      if (detailMarker) detailMap.removeLayer(detailMarker);
       const icon = window.pawMap.createIcon(activeCase.urgency, '📍');
-      L.marker([lat, lng], { icon }).addTo(detailMap);
+      detailMarker = L.marker([lat, lng], { icon }).addTo(detailMap);
     }
 
     async function postCaseNote() {
@@ -516,28 +628,31 @@
       const val = input.value.trim();
       if (!val || !activeCase) return;
 
-      const user = (window.pawAPI && window.pawAPI.getCurrentUser()) || { name: 'Citizen / Community' };
-
-      await window.pawStore.addCaseNote(activeCase.id, val, user.name || 'Citizen');
-      input.value = '';
-      showToast('Scene update note added to timeline', 'success');
-      await loadCase(false);
+      try {
+        await window.pawStore.addCaseNote(activeCase.id, val);
+        input.value = '';
+        showToast('Field note recorded.', 'success');
+        await loadCase(false);
+      } catch (err) {
+        showToast(err.message || 'The field note could not be saved.', 'error');
+      }
     }
 
-    async function setQuickStatus(status, note) {
+    async function setQuickStatus(status) {
       if (!activeCase) return;
-      const user = (window.pawAPI && window.pawAPI.getCurrentUser()) || { name: 'Authorized Dispatcher' };
-
-      await window.pawStore.updateCaseStatus(activeCase.id, status, note, user.name || 'Responder');
-      showToast(`Case status updated: ${status.replace('_', ' ').toUpperCase()}`, 'success');
-      await loadCase(false);
+      try {
+        await window.pawStore.updateCaseStatus(activeCase.id, status);
+        showToast(`Case status recorded: ${status.replaceAll('_', ' ')}`, 'success');
+        await loadCase(false);
+      } catch (err) {
+        showToast(err.message || 'The case status could not be saved.', 'error');
+      }
     }
 
     function openAcceptModal() {
-      const user = (window.pawAPI && window.pawAPI.getCurrentUser()) || (window.pawStore && window.pawStore.activeUser);
-      const nameInput = document.getElementById('acc-responder-name');
-      if (nameInput && user && user.name) {
-        nameInput.value = user.name;
+      if (!isVerifiedResponder()) {
+        showToast('Sign in with a verified responder account to accept this case.', 'error');
+        return;
       }
       document.getElementById('modal-accept-case').style.display = 'flex';
     }
@@ -547,22 +662,20 @@
     }
 
     async function confirmAcceptCase() {
-      const user = (window.pawAPI && window.pawAPI.getCurrentUser()) || { name: 'Unit 4 Responder', role: 'responder' };
-      const name = document.getElementById('acc-responder-name').value.trim() || user.name || 'Volunteer Rescuer';
+      if (!isVerifiedResponder() || !activeCase) {
+        showToast('Sign in with a verified responder account to accept this case.', 'error');
+        return;
+      }
       const eta = document.getElementById('acc-responder-eta').value;
 
-      await window.pawStore.assignResponder(activeCase.id, {
-        name: name,
-        role: user.role || 'responder',
-        organization: user.organization || 'City Animal Rescue Taskforce',
-        phone: user.phone || '+1 555-0248',
-        vehicle: 'Rescue Van / Mobile Kit',
-        etaText: eta
-      });
-
-      closeAcceptModal();
-      showToast(`Case #${activeCase.id} accepted. You are the assigned responder.`, 'success');
-      await loadCase(false);
+      try {
+        await window.pawStore.assignResponder(activeCase.id, { eta });
+        closeAcceptModal();
+        showToast(`Case #${activeCase.id} accepted.`, 'success');
+        await loadCase(false);
+      } catch (err) {
+        showToast(err.message || 'This case could not be accepted.', 'error');
+      }
     }
 
     function copyReferenceCode() {

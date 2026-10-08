@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Active Animal Reports Map — PawSOS</title>
-  <meta name="description" content="Interactive map of active animal emergency reports and local rescue operations.">
+  <meta name="description" content="Browse animal reports on an interactive map. Public map locations are approximate to protect privacy.">
   
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
@@ -54,7 +54,7 @@
       border-radius: var(--radius-xs);
       cursor: pointer;
       color: var(--text-secondary);
-      transition: all var(--transition-fast);
+      transition: none;
     }
 
     .map-filter-chip.active {
@@ -95,10 +95,25 @@
       gap: 0.5rem;
     }
 
+    .map-view-toggle {
+      display: none;
+    }
+
     @media (max-width: 860px) {
       .map-split-view {
         grid-template-columns: 1fr;
         height: auto;
+      }
+      .map-view-toggle {
+        display: flex;
+        grid-column: 1;
+        justify-content: center;
+        gap: .5rem;
+        padding: .75rem;
+      }
+      .map-split-view[data-mobile-view="map"] .map-sidebar,
+      .map-split-view[data-mobile-view="list"] #map-panel {
+        display: none;
       }
       #community-map {
         height: 420px;
@@ -114,9 +129,13 @@
   <!-- Top Navigation Placeholder (ui.js) -->
   <div id="navbar-mount"></div>
 
-  <main class="map-split-view">
+  <main class="map-split-view" id="map-layout" data-mobile-view="map">
+    <div class="map-view-toggle" role="group" aria-label="Choose map or report list">
+      <button type="button" class="btn btn-secondary btn-sm" data-map-view="map" aria-pressed="true">Map</button>
+      <button type="button" class="btn btn-secondary btn-sm" data-map-view="list" aria-pressed="false">Report list</button>
+    </div>
     <!-- Map Canvas -->
-    <div style="position: relative; width: 100%; height: 100%;">
+    <div id="map-panel" style="position: relative; width: 100%; height: 100%;">
       <div id="community-map"></div>
 
       <!-- Floating Map Helper -->
@@ -134,7 +153,7 @@
     <aside class="map-sidebar">
       <div class="map-sidebar-head">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <h2 style="font-size: 1.15rem; margin: 0;">Active Area Reports</h2>
+          <h2 style="font-size: 1.15rem; margin: 0;">Animal reports</h2>
           <span style="font-size: 0.8rem; color: var(--text-muted);" id="map-total-indicator">0 cases</span>
         </div>
 
@@ -142,6 +161,11 @@
           <button class="map-filter-chip active" data-filter="all" onclick="setMapFilter('all')">All</button>
           <button class="map-filter-chip" data-filter="critical" onclick="setMapFilter('critical')">🔴 Critical</button>
           <button class="map-filter-chip" data-filter="urgent" onclick="setMapFilter('urgent')">🟠 Urgent</button>
+          <button class="map-filter-chip" data-filter="moderate" onclick="setMapFilter('moderate')">Moderate</button>
+          <button class="map-filter-chip" data-filter="dog" onclick="setMapFilter('dog')">Dog</button>
+          <button class="map-filter-chip" data-filter="cat" onclick="setMapFilter('cat')">Cat</button>
+          <button class="map-filter-chip" data-filter="bird" onclick="setMapFilter('bird')">Bird</button>
+          <button class="map-filter-chip" data-filter="cow" onclick="setMapFilter('cow')">Cattle</button>
           <button class="map-filter-chip" data-filter="resolved" onclick="setMapFilter('resolved')">🟢 Resolved</button>
         </div>
       </div>
@@ -167,6 +191,9 @@
     let activeFilter = 'all';
 
     document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('[data-map-view]').forEach(button => {
+        button.addEventListener('click', () => setMobileMapView(button.dataset.mapView));
+      });
       initMap();
       renderMapData();
 
@@ -177,12 +204,22 @@
       }
     });
 
+    function setMobileMapView(view) {
+      const layout = document.getElementById('map-layout');
+      if (!layout || !['map', 'list'].includes(view)) return;
+      layout.dataset.mobileView = view;
+      document.querySelectorAll('[data-map-view]').forEach(button => {
+        button.setAttribute('aria-pressed', String(button.dataset.mapView === view));
+      });
+      if (view === 'map' && commMap) setTimeout(() => commMap.invalidateSize(), 0);
+    }
+
     function initMap() {
       if (typeof L === 'undefined') return;
 
       commMap = L.map('community-map', {
-        center: [26.8928, 75.7873],
-        zoom: 13
+        center: window.pawMap.defaultCenter,
+        zoom: window.pawMap.defaultZoom
       });
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -214,6 +251,8 @@
         if (activeFilter === 'all') return true;
         if (activeFilter === 'critical') return c.urgency === 'critical';
         if (activeFilter === 'urgent') return c.urgency === 'urgent';
+        if (activeFilter === 'moderate') return c.urgency === 'moderate';
+        if (['dog', 'cat', 'bird', 'cow'].includes(activeFilter)) return c.animalType.toLowerCase() === activeFilter;
         if (activeFilter === 'resolved') return c.status === 'resolved';
         return true;
       });
@@ -226,41 +265,45 @@
       }
 
       scrollEl.innerHTML = filtered.map(c => {
-        const lat = c.location ? c.location.lat : 26.8928;
-        const lng = c.location ? c.location.lng : 75.7873;
+        const lat = c.location ? c.location.lat : NaN;
+        const lng = c.location ? c.location.lng : NaN;
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return '';
+        const escape = window.pawEscapeHTML;
         const iconUrgency = c.status === 'resolved' ? 'resolved' : c.urgency;
 
-        // Leaflet Marker
         const icon = window.pawMap.createIcon(iconUrgency, '🐾');
         const marker = L.marker([lat, lng], { icon }).addTo(markersLayer);
+        const image = c.photo
+          ? `<img src="${escape(c.photo)}" alt="${escape(c.animalName)}" style="width:100%;height:95px;object-fit:cover;border-radius:4px;margin-bottom:.5rem;">`
+          : '<div aria-hidden="true" style="height:3rem;font-size:2rem;">🐾</div>';
 
         marker.bindPopup(`
           <div style="width: 220px; padding: 0.75rem;">
-            <img src="${c.photo || 'assets/dog-sample.jpg'}" style="width: 100%; height: 95px; object-fit: cover; border-radius: 4px; margin-bottom: 0.5rem;" onerror="this.src='assets/dog-sample.jpg'">
-            <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 0.2rem;">#${c.id} — ${c.animalName}</div>
-            <div style="font-size: 0.8rem; color: #475569; margin-bottom: 0.6rem;">${c.condition}</div>
-            <a href="case.html?id=${c.id}" class="btn btn-secondary btn-sm btn-block">Track Case Status →</a>
+            ${image}
+            <div style="font-weight:700;font-size:.95rem;margin-bottom:.2rem;">#${escape(c.id)} — ${escape(c.animalName)}</div>
+            <div style="font-size:.8rem;color:#475569;margin-bottom:.6rem;">${escape(c.condition)}</div>
+            <a href="case.html?id=${encodeURIComponent(c.id)}" class="btn btn-secondary btn-sm btn-block">Track Case Status →</a>
           </div>
         `);
 
         return `
-          <div class="map-case-item" onclick="focusCase(${lat}, ${lng}, '${c.id}')" id="case-item-${c.id}">
+          <div class="map-case-item" onclick="focusCase(${lat}, ${lng}, '${escape(c.id)}')" id="case-item-${escape(c.id)}">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-              <strong style="font-size: 0.88rem; font-family: var(--font-mono); color: var(--brand-primary);">${c.id}</strong>
-              <span class="badge ${c.urgency === 'critical' ? 'badge-emergency' : (c.urgency === 'urgent' ? 'badge-urgent' : 'badge-neutral')}">${c.urgency}</span>
+              <strong style="font-size:.88rem;font-family:var(--font-mono);color:var(--brand-primary);">${escape(c.id)}</strong>
+              <span class="badge ${c.urgency === 'critical' ? 'badge-emergency' : (c.urgency === 'urgent' ? 'badge-urgent' : 'badge-neutral')}">${escape(c.urgency)}</span>
             </div>
 
             <div style="font-weight: 600; font-size: 0.92rem; margin-bottom: 0.2rem;">
-              ${c.animalName}
+              ${escape(c.animalName)}
             </div>
 
             <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0; margin-bottom: 0.4rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
-              ${c.condition}
+              ${escape(c.condition)}
             </p>
 
             <div style="font-size: 0.75rem; color: var(--text-muted); display: flex; justify-content: space-between;">
-              <span>📍 ${c.location ? c.location.area || c.location.city : 'Jaipur'}</span>
-              <a href="case.html?id=${c.id}" style="font-weight: 600;">Details →</a>
+              <span>📍 ${escape(c.location ? c.location.area || c.location.city || 'Approximate area' : 'Approximate area')}</span>
+              <a href="case.html?id=${encodeURIComponent(c.id)}" style="font-weight:600;">Details →</a>
             </div>
           </div>
         `;

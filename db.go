@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -124,6 +125,10 @@ func (db *DB) migrate() error {
 			longitude DOUBLE PRECISION NOT NULL,
 			assigned_responder_id VARCHAR(64),
 			assigned_responder_name VARCHAR(255),
+			location_accuracy DOUBLE PRECISION,
+			location_timestamp TIMESTAMPTZ,
+			location_source VARCHAR(32),
+			eta VARCHAR(128),
 			created_at TIMESTAMPTZ NOT NULL,
 			updated_at TIMESTAMPTZ NOT NULL
 		);
@@ -136,6 +141,22 @@ func (db *DB) migrate() error {
 			author_role VARCHAR(32) NOT NULL,
 			note TEXT NOT NULL,
 			created_at TIMESTAMPTZ NOT NULL
+		);
+
+		CREATE TABLE IF NOT EXISTS report_evidence (
+			id VARCHAR(64) PRIMARY KEY,
+			report_id VARCHAR(64) NOT NULL UNIQUE REFERENCES reports(id) ON DELETE CASCADE,
+			original_filename TEXT NOT NULL,
+			mime_type VARCHAR(128) NOT NULL,
+			file_size BIGINT NOT NULL,
+			sha256 VARCHAR(64) NOT NULL,
+			capture_timestamp TIMESTAMPTZ,
+			upload_timestamp TIMESTAMPTZ NOT NULL,
+			latitude DOUBLE PRECISION,
+			longitude DOUBLE PRECISION,
+			location_accuracy DOUBLE PRECISION,
+			source_type VARCHAR(32) NOT NULL,
+			storage_reference TEXT NOT NULL
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status);
@@ -175,6 +196,10 @@ func (db *DB) migrate() error {
 			longitude REAL NOT NULL,
 			assigned_responder_id TEXT,
 			assigned_responder_name TEXT,
+			location_accuracy REAL,
+			location_timestamp DATETIME,
+			location_source TEXT,
+			eta TEXT,
 			created_at DATETIME NOT NULL,
 			updated_at DATETIME NOT NULL
 		);
@@ -190,6 +215,23 @@ func (db *DB) migrate() error {
 			FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE
 		);
 
+		CREATE TABLE IF NOT EXISTS report_evidence (
+			id TEXT PRIMARY KEY,
+			report_id TEXT NOT NULL UNIQUE,
+			original_filename TEXT NOT NULL,
+			mime_type TEXT NOT NULL,
+			file_size INTEGER NOT NULL,
+			sha256 TEXT NOT NULL,
+			capture_timestamp DATETIME,
+			upload_timestamp DATETIME NOT NULL,
+			latitude REAL,
+			longitude REAL,
+			location_accuracy REAL,
+			source_type TEXT NOT NULL,
+			storage_reference TEXT NOT NULL,
+			FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE
+		);
+
 		CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status);
 		CREATE INDEX IF NOT EXISTS idx_reports_urgency ON reports(urgency);
 		CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports(created_at DESC);
@@ -199,19 +241,83 @@ func (db *DB) migrate() error {
 	}
 
 	_, err := db.Exec(schema)
-	return err
+	if err != nil {
+		return err
+	}
+	return db.ensureReportColumns()
+}
+
+func (db *DB) ensureReportColumns() error {
+	if db.driver == "postgres" {
+		for _, column := range []struct{ name, kind string }{
+			{"requested_role", "VARCHAR(32) NOT NULL DEFAULT 'citizen'"},
+			{"verified", "BOOLEAN NOT NULL DEFAULT FALSE"},
+		} {
+			if _, err := db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ` + column.name + ` ` + column.kind); err != nil {
+				return err
+			}
+		}
+		for _, column := range []struct{ name, kind string }{
+			{"location_accuracy", "DOUBLE PRECISION"},
+			{"location_timestamp", "TIMESTAMPTZ"},
+			{"location_source", "VARCHAR(32)"},
+			{"eta", "VARCHAR(128)"},
+		} {
+			if _, err := db.Exec(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS ` + column.name + ` ` + column.kind); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	for _, column := range []struct{ table, name, kind string }{
+		{"users", "requested_role", "TEXT NOT NULL DEFAULT 'citizen'"},
+		{"users", "verified", "INTEGER NOT NULL DEFAULT 0"},
+		{"reports", "location_accuracy", "REAL"},
+		{"reports", "location_timestamp", "DATETIME"},
+		{"reports", "location_source", "TEXT"},
+		{"reports", "eta", "TEXT"},
+	} {
+		rows, err := db.Query("PRAGMA table_info(" + column.table + ")")
+		if err != nil {
+			return err
+		}
+		found := false
+		for rows.Next() {
+			var cid int
+			var name, dataType string
+			var notNull, primaryKey int
+			var defaultValue sql.NullString
+			if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &primaryKey); err != nil {
+				rows.Close()
+				return err
+			}
+			if name == column.name {
+				found = true
+			}
+		}
+		if err := rows.Close(); err != nil {
+			return err
+		}
+		if !found {
+			if _, err := db.Exec("ALTER TABLE " + column.table + " ADD COLUMN " + column.name + " " + column.kind); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // ----------------- USERS -----------------
 
 func (db *DB) CreateUser(ctx context.Context, u *models.User) error {
 	query := db.rebind(`
-		INSERT INTO users (id, name, email, password_hash, role, phone, organization, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO users (id, name, email, password_hash, role, requested_role, verified, phone, organization, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 
 	_, err := db.ExecContext(ctx, query,
-		u.ID, u.Name, u.Email, u.PasswordHash, string(u.Role), u.Phone, u.Organization, u.CreatedAt,
+		u.ID, u.Name, u.Email, u.PasswordHash, string(u.Role), string(u.RequestedRole), u.Verified, u.Phone, u.Organization, u.CreatedAt,
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "duplicate") {
@@ -224,16 +330,16 @@ func (db *DB) CreateUser(ctx context.Context, u *models.User) error {
 
 func (db *DB) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
 	query := db.rebind(`
-		SELECT id, name, email, password_hash, role, phone, organization, created_at
+		SELECT id, name, email, password_hash, role, requested_role, verified, phone, organization, created_at
 		FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1
 	`)
 
 	var u models.User
 	var phone, org sql.NullString
-	var roleStr string
+	var roleStr, requestedRole string
 
 	err := db.QueryRowContext(ctx, query, email).Scan(
-		&u.ID, &u.Name, &u.Email, &u.PasswordHash, &roleStr, &phone, &org, &u.CreatedAt,
+		&u.ID, &u.Name, &u.Email, &u.PasswordHash, &roleStr, &requestedRole, &u.Verified, &phone, &org, &u.CreatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -243,6 +349,7 @@ func (db *DB) GetUserByEmail(ctx context.Context, email string) (*models.User, e
 	}
 
 	u.Role = models.UserRole(roleStr)
+	u.RequestedRole = models.UserRole(requestedRole)
 	if phone.Valid {
 		u.Phone = phone.String
 	}
@@ -254,16 +361,16 @@ func (db *DB) GetUserByEmail(ctx context.Context, email string) (*models.User, e
 
 func (db *DB) GetUserByID(ctx context.Context, id string) (*models.User, error) {
 	query := db.rebind(`
-		SELECT id, name, email, password_hash, role, phone, organization, created_at
+		SELECT id, name, email, password_hash, role, requested_role, verified, phone, organization, created_at
 		FROM users WHERE id = ? LIMIT 1
 	`)
 
 	var u models.User
 	var phone, org sql.NullString
-	var roleStr string
+	var roleStr, requestedRole string
 
 	err := db.QueryRowContext(ctx, query, id).Scan(
-		&u.ID, &u.Name, &u.Email, &u.PasswordHash, &roleStr, &phone, &org, &u.CreatedAt,
+		&u.ID, &u.Name, &u.Email, &u.PasswordHash, &roleStr, &requestedRole, &u.Verified, &phone, &org, &u.CreatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -273,6 +380,7 @@ func (db *DB) GetUserByID(ctx context.Context, id string) (*models.User, error) 
 	}
 
 	u.Role = models.UserRole(roleStr)
+	u.RequestedRole = models.UserRole(requestedRole)
 	if phone.Valid {
 		u.Phone = phone.String
 	}
@@ -288,6 +396,46 @@ func (db *DB) CountUsers(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+func (db *DB) RemoveLegacyDemoData(ctx context.Context) error {
+	legacyUserPassword, err := auth.HashPassword(uuid.NewString())
+	if err != nil {
+		return err
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	userQuery := db.rebind(`
+		UPDATE users
+		SET name = ?, password_hash = ?, role = ?, requested_role = ?, verified = ?, phone = NULL, organization = NULL
+		WHERE LOWER(email) IN (?, ?)
+	`)
+	if _, err := tx.ExecContext(ctx, userQuery, "Disabled legacy account", legacyUserPassword,
+		string(models.RoleCitizen), string(models.RoleCitizen), false,
+		"admin@pawsos.org", "responder@pawsos.org"); err != nil {
+		return err
+	}
+
+	ids := []string{"PAW-4810", "PAW-4812", "PAW-4813", "PAW-4814"}
+	marks := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	for _, table := range []string{"report_evidence", "report_timeline", "reports"} {
+		query := db.rebind("DELETE FROM " + table + " WHERE report_id IN (" + marks + ")")
+		if table == "reports" {
+			query = db.rebind("DELETE FROM reports WHERE id IN (" + marks + ")")
+		}
+		args := make([]interface{}, len(ids))
+		for i, id := range ids {
+			args[i] = id
+		}
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 // ----------------- REPORTS -----------------
 
 func (db *DB) CreateReport(ctx context.Context, r *models.Report) error {
@@ -295,35 +443,56 @@ func (db *DB) CreateReport(ctx context.Context, r *models.Report) error {
 		INSERT INTO reports (
 			id, animal_type, animal_name, urgency, condition, description, photo_url,
 			status, reporter_name, reporter_phone, address, area, city, latitude, longitude,
-			assigned_responder_id, assigned_responder_name, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			assigned_responder_id, assigned_responder_name, location_accuracy, location_timestamp,
+			location_source, eta, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 
-	_, err := db.ExecContext(ctx, query,
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx, query,
 		r.ID, r.AnimalType, r.AnimalName, string(r.Urgency), r.Condition, r.Description, r.PhotoURL,
 		string(r.Status), r.ReporterName, r.ReporterPhone, r.Address, r.Area, r.City, r.Latitude, r.Longitude,
-		r.AssignedResponderID, r.AssignedResponderName, r.CreatedAt, r.UpdatedAt,
+		r.AssignedResponderID, r.AssignedResponderName, r.LocationAccuracy, r.LocationTimestamp, r.LocationSource, r.ETA,
+		r.CreatedAt, r.UpdatedAt,
 	)
 	if err != nil {
 		return err
 	}
 
-	// Add initial timeline entry
-	return db.AddTimelineEntry(ctx, &models.ReportTimelineEntry{
+	entry := &models.ReportTimelineEntry{
 		ReportID:   r.ID,
 		Status:     r.Status,
-		AuthorName: r.ReporterName,
+		AuthorName: "Reporter",
 		AuthorRole: "citizen",
-		Note:       "Report registered with PawSOS dispatch.",
+		Note:       "Report submitted.",
 		CreatedAt:  r.CreatedAt,
-	})
+	}
+	timelineQuery := db.rebind(`
+		INSERT INTO report_timeline (report_id, status, author_name, author_role, note, created_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`)
+	if _, err := tx.ExecContext(ctx, timelineQuery, entry.ReportID, string(entry.Status), entry.AuthorName, entry.AuthorRole, entry.Note, entry.CreatedAt); err != nil {
+		return err
+	}
+	if r.Evidence != nil {
+		if err := insertEvidence(ctx, tx, db.driver, r.ID, r.Evidence); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (db *DB) GetReportByID(ctx context.Context, id string) (*models.Report, error) {
 	query := db.rebind(`
 		SELECT id, animal_type, animal_name, urgency, condition, description, photo_url,
 		       status, reporter_name, reporter_phone, address, area, city, latitude, longitude,
-		       assigned_responder_id, assigned_responder_name, created_at, updated_at
+		       assigned_responder_id, assigned_responder_name, location_accuracy, location_timestamp,
+		       location_source, eta, created_at, updated_at
 		FROM reports WHERE id = ? LIMIT 1
 	`)
 
@@ -331,11 +500,14 @@ func (db *DB) GetReportByID(ctx context.Context, id string) (*models.Report, err
 	var animalName, desc, photoURL, area, city sql.NullString
 	var assignedID, assignedName sql.NullString
 	var urgencyStr, statusStr string
+	var locationAccuracy sql.NullFloat64
+	var locationTimestamp sql.NullTime
+	var locationSource, eta sql.NullString
 
 	err := db.QueryRowContext(ctx, query, id).Scan(
 		&r.ID, &r.AnimalType, &animalName, &urgencyStr, &r.Condition, &desc, &photoURL,
 		&statusStr, &r.ReporterName, &r.ReporterPhone, &r.Address, &area, &city, &r.Latitude, &r.Longitude,
-		&assignedID, &assignedName, &r.CreatedAt, &r.UpdatedAt,
+		&assignedID, &assignedName, &locationAccuracy, &locationTimestamp, &locationSource, &eta, &r.CreatedAt, &r.UpdatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -367,11 +539,27 @@ func (db *DB) GetReportByID(ctx context.Context, id string) (*models.Report, err
 	if assignedName.Valid {
 		r.AssignedResponderName = &assignedName.String
 	}
+	if locationAccuracy.Valid {
+		r.LocationAccuracy = &locationAccuracy.Float64
+	}
+	if locationTimestamp.Valid {
+		r.LocationTimestamp = &locationTimestamp.Time
+	}
+	if locationSource.Valid {
+		r.LocationSource = locationSource.String
+	}
+	if eta.Valid {
+		r.ETA = eta.String
+	}
 
-	// Fetch timeline
 	timeline, err := db.GetTimelineForReport(ctx, r.ID)
-	if err == nil {
-		r.Timeline = timeline
+	if err != nil {
+		return nil, err
+	}
+	r.Timeline = timeline
+	r.Evidence, err = db.GetEvidence(ctx, r.ID)
+	if err != nil {
+		return nil, err
 	}
 
 	return &r, nil
@@ -381,7 +569,9 @@ func (db *DB) GetReports(ctx context.Context, filter ReportFilter) ([]*models.Re
 	var whereClauses []string
 	var args []interface{}
 
-	if filter.Status != "" && filter.Status != "all" {
+	if filter.Status == "active" {
+		whereClauses = append(whereClauses, "status IN ('reported', 'assigned', 'in_progress', 'on_the_way', 'arrived', 'animal_secured', 'transporting', 'at_vet')")
+	} else if filter.Status != "" && filter.Status != "all" {
 		whereClauses = append(whereClauses, "status = ?")
 		args = append(args, filter.Status)
 	}
@@ -411,8 +601,11 @@ func (db *DB) GetReports(ctx context.Context, filter ReportFilter) ([]*models.Re
 
 	// Limit and Offset
 	limit := filter.Limit
-	if limit <= 0 || limit > 100 {
+	if limit <= 0 {
 		limit = 50
+	}
+	if limit > 10000 {
+		limit = 10000
 	}
 	offset := filter.Offset
 	if offset < 0 {
@@ -422,7 +615,8 @@ func (db *DB) GetReports(ctx context.Context, filter ReportFilter) ([]*models.Re
 	selectSQL := fmt.Sprintf(`
 		SELECT id, animal_type, animal_name, urgency, condition, description, photo_url,
 		       status, reporter_name, reporter_phone, address, area, city, latitude, longitude,
-		       assigned_responder_id, assigned_responder_name, created_at, updated_at
+		       assigned_responder_id, assigned_responder_name, location_accuracy, location_timestamp,
+		       location_source, eta, created_at, updated_at
 		FROM reports %s
 		ORDER BY created_at DESC
 		LIMIT ? OFFSET ?
@@ -443,11 +637,14 @@ func (db *DB) GetReports(ctx context.Context, filter ReportFilter) ([]*models.Re
 		var animalName, desc, photoURL, area, city sql.NullString
 		var assignedID, assignedName sql.NullString
 		var urgencyStr, statusStr string
+		var locationAccuracy sql.NullFloat64
+		var locationTimestamp sql.NullTime
+		var locationSource, eta sql.NullString
 
 		if err := rows.Scan(
 			&r.ID, &r.AnimalType, &animalName, &urgencyStr, &r.Condition, &desc, &photoURL,
 			&statusStr, &r.ReporterName, &r.ReporterPhone, &r.Address, &area, &city, &r.Latitude, &r.Longitude,
-			&assignedID, &assignedName, &r.CreatedAt, &r.UpdatedAt,
+			&assignedID, &assignedName, &locationAccuracy, &locationTimestamp, &locationSource, &eta, &r.CreatedAt, &r.UpdatedAt,
 		); err != nil {
 			return nil, 0, err
 		}
@@ -475,6 +672,18 @@ func (db *DB) GetReports(ctx context.Context, filter ReportFilter) ([]*models.Re
 		if assignedName.Valid {
 			r.AssignedResponderName = &assignedName.String
 		}
+		if locationAccuracy.Valid {
+			r.LocationAccuracy = &locationAccuracy.Float64
+		}
+		if locationTimestamp.Valid {
+			r.LocationTimestamp = &locationTimestamp.Time
+		}
+		if locationSource.Valid {
+			r.LocationSource = locationSource.String
+		}
+		if eta.Valid {
+			r.ETA = eta.String
+		}
 
 		reports = append(reports, &r)
 	}
@@ -485,11 +694,19 @@ func (db *DB) GetReports(ctx context.Context, filter ReportFilter) ([]*models.Re
 func (db *DB) UpdateReportStatus(ctx context.Context, id string, status models.ReportStatus, authorName, authorRole, note string) error {
 	now := time.Now()
 	query := db.rebind("UPDATE reports SET status = ?, updated_at = ? WHERE id = ?")
-	res, err := db.ExecContext(ctx, query, string(status), now, id)
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	rowsAffected, _ := res.RowsAffected()
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx, query, string(status), now, id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
 	if rowsAffected == 0 {
 		return ErrNotFound
 	}
@@ -498,45 +715,83 @@ func (db *DB) UpdateReportStatus(ctx context.Context, id string, status models.R
 		note = fmt.Sprintf("Status updated to %s", status)
 	}
 
-	return db.AddTimelineEntry(ctx, &models.ReportTimelineEntry{
+	if err := addTimelineEntry(ctx, tx, db.driver, &models.ReportTimelineEntry{
 		ReportID:   id,
 		Status:     status,
 		AuthorName: authorName,
 		AuthorRole: authorRole,
 		Note:       note,
 		CreatedAt:  now,
-	})
+	}); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (db *DB) AssignReport(ctx context.Context, id, responderID, responderName, eta, authorRole string) error {
 	now := time.Now()
-	query := db.rebind("UPDATE reports SET assigned_responder_id = ?, assigned_responder_name = ?, status = ?, updated_at = ? WHERE id = ?")
-	res, err := db.ExecContext(ctx, query, responderID, responderName, string(models.StatusAssigned), now, id)
+	query := db.rebind("UPDATE reports SET assigned_responder_id = ?, assigned_responder_name = ?, status = ?, eta = ?, updated_at = ? WHERE id = ? AND (assigned_responder_id IS NULL OR assigned_responder_id = ?)")
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	rowsAffected, _ := res.RowsAffected()
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx, query, responderID, responderName, string(models.StatusAssigned), eta, now, id, responderID)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
 	if rowsAffected == 0 {
-		return ErrNotFound
+		return ErrConflict
 	}
 
-	note := fmt.Sprintf("Assigned to responder %s. Estimated arrival: %s", responderName, eta)
-	return db.AddTimelineEntry(ctx, &models.ReportTimelineEntry{
+	note := fmt.Sprintf("Case accepted by %s.", responderName)
+	if eta != "" {
+		note = fmt.Sprintf("%s ETA reported: %s", note, eta)
+	}
+	if err := addTimelineEntry(ctx, tx, db.driver, &models.ReportTimelineEntry{
 		ReportID:   id,
 		Status:     models.StatusAssigned,
 		AuthorName: responderName,
 		AuthorRole: authorRole,
 		Note:       note,
 		CreatedAt:  now,
-	})
+	}); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (db *DB) AddTimelineEntry(ctx context.Context, entry *models.ReportTimelineEntry) error {
-	query := db.rebind(`
+	return addTimelineEntry(ctx, db, db.driver, entry)
+}
+
+type timelineExecutor interface {
+	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
+}
+
+func addTimelineEntry(ctx context.Context, executor timelineExecutor, driver string, entry *models.ReportTimelineEntry) error {
+	query := `
 		INSERT INTO report_timeline (report_id, status, author_name, author_role, note, created_at)
 		VALUES (?, ?, ?, ?, ?, ?)
-	`)
-	_, err := db.ExecContext(ctx, query,
+	`
+	if driver == "postgres" {
+		var b strings.Builder
+		index := 1
+		for _, char := range query {
+			if char == '?' {
+				fmt.Fprintf(&b, "$%d", index)
+				index++
+			} else {
+				b.WriteRune(char)
+			}
+		}
+		query = b.String()
+	}
+	_, err := executor.ExecContext(ctx, query,
 		entry.ReportID, string(entry.Status), entry.AuthorName, entry.AuthorRole, entry.Note, entry.CreatedAt,
 	)
 	return err
@@ -567,149 +822,189 @@ func (db *DB) GetTimelineForReport(ctx context.Context, reportID string) ([]mode
 	return entries, rows.Err()
 }
 
+func insertEvidence(ctx context.Context, tx *sql.Tx, driver, reportID string, evidence *models.Evidence) error {
+	query := `
+		INSERT INTO report_evidence (
+			id, report_id, original_filename, mime_type, file_size, sha256, capture_timestamp,
+			upload_timestamp, latitude, longitude, location_accuracy, source_type, storage_reference
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	if driver == "postgres" {
+		var b strings.Builder
+		idx := 1
+		for _, ch := range query {
+			if ch == '?' {
+				fmt.Fprintf(&b, "$%d", idx)
+				idx++
+			} else {
+				b.WriteRune(ch)
+			}
+		}
+		query = b.String()
+	}
+	_, err := tx.ExecContext(ctx, query,
+		evidence.ID, reportID, evidence.OriginalFilename, evidence.MIMEType, evidence.FileSize,
+		evidence.SHA256, evidence.CaptureTimestamp, evidence.UploadTimestamp, evidence.Latitude,
+		evidence.Longitude, evidence.LocationAccuracy, evidence.SourceType, evidence.StorageReference,
+	)
+	return err
+}
+
+func (db *DB) GetEvidence(ctx context.Context, reportID string) (*models.Evidence, error) {
+	query := db.rebind(`
+		SELECT id, original_filename, mime_type, file_size, sha256, capture_timestamp,
+		       upload_timestamp, latitude, longitude, location_accuracy, source_type, storage_reference
+		FROM report_evidence WHERE report_id = ? LIMIT 1
+	`)
+	var evidence models.Evidence
+	var capturedAt sql.NullTime
+	var latitude, longitude, accuracy sql.NullFloat64
+	err := db.QueryRowContext(ctx, query, reportID).Scan(
+		&evidence.ID, &evidence.OriginalFilename, &evidence.MIMEType, &evidence.FileSize,
+		&evidence.SHA256, &capturedAt, &evidence.UploadTimestamp, &latitude, &longitude,
+		&accuracy, &evidence.SourceType, &evidence.StorageReference,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if capturedAt.Valid {
+		evidence.CaptureTimestamp = &capturedAt.Time
+	}
+	if latitude.Valid {
+		evidence.Latitude = &latitude.Float64
+	}
+	if longitude.Valid {
+		evidence.Longitude = &longitude.Float64
+	}
+	if accuracy.Valid {
+		evidence.LocationAccuracy = &accuracy.Float64
+	}
+	return &evidence, nil
+}
+
+func (db *DB) FindDuplicateReport(ctx context.Context, animalType string, latitude, longitude float64) (*models.Report, error) {
+	reports, _, err := db.GetReports(ctx, ReportFilter{Status: "active", Limit: 100})
+	if err != nil {
+		return nil, err
+	}
+	for _, report := range reports {
+		if !strings.EqualFold(report.AnimalType, animalType) || time.Since(report.CreatedAt) > 6*time.Hour {
+			continue
+		}
+		dLat := (report.Latitude - latitude) * math.Pi / 180
+		dLng := (report.Longitude - longitude) * math.Pi / 180
+		lat1 := latitude * math.Pi / 180
+		lat2 := report.Latitude * math.Pi / 180
+		a := math.Sin(dLat/2)*math.Sin(dLat/2) + math.Cos(lat1)*math.Cos(lat2)*math.Sin(dLng/2)*math.Sin(dLng/2)
+		distance := 6371000 * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+		if distance <= 150 {
+			return report, nil
+		}
+	}
+	return nil, nil
+}
+
+func (db *DB) GetPendingResponders(ctx context.Context) ([]models.User, error) {
+	query := db.rebind(`
+		SELECT id, name, email, role, requested_role, verified, phone, organization, created_at
+		FROM users WHERE requested_role = ? AND role = ? ORDER BY created_at ASC
+	`)
+	rows, err := db.QueryContext(ctx, query, string(models.RoleResponder), string(models.RoleCitizen))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var users []models.User
+	for rows.Next() {
+		var user models.User
+		var role, requested string
+		var phone, organization sql.NullString
+		if err := rows.Scan(&user.ID, &user.Name, &user.Email, &role, &requested, &user.Verified, &phone, &organization, &user.CreatedAt); err != nil {
+			return nil, err
+		}
+		user.Role, user.RequestedRole = models.UserRole(role), models.UserRole(requested)
+		if phone.Valid {
+			user.Phone = phone.String
+		}
+		if organization.Valid {
+			user.Organization = organization.String
+		}
+		users = append(users, user)
+	}
+	return users, rows.Err()
+}
+
+func (db *DB) VerifyResponder(ctx context.Context, id string, verified bool) error {
+	role := models.RoleCitizen
+	requestedRole := models.RoleCitizen
+	if verified {
+		role = models.RoleResponder
+		requestedRole = models.RoleResponder
+	}
+	query := db.rebind(`UPDATE users SET role = ?, verified = ?, requested_role = ? WHERE id = ? AND requested_role = ?`)
+	result, err := db.ExecContext(ctx, query, string(role), verified, string(requestedRole), id, string(models.RoleResponder))
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (db *DB) RequestResponderReview(ctx context.Context, userID, phone, organization string) error {
+	query := db.rebind(`UPDATE users SET requested_role = ?, phone = COALESCE(NULLIF(?, ''), phone), organization = COALESCE(NULLIF(?, ''), organization) WHERE id = ? AND role = ?`)
+	result, err := db.ExecContext(ctx, query, string(models.RoleResponder), phone, organization, userID, string(models.RoleCitizen))
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrConflict
+	}
+	return nil
+}
+
 func (db *DB) GetStats(ctx context.Context) (*models.StatsResponse, error) {
 	stats := &models.StatsResponse{}
 
-	_ = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM reports").Scan(&stats.TotalReports)
-	_ = db.QueryRowContext(ctx, db.rebind("SELECT COUNT(*) FROM reports WHERE status IN ('reported', 'assigned', 'in_progress')")).Scan(&stats.ActiveCases)
-	_ = db.QueryRowContext(ctx, db.rebind("SELECT COUNT(*) FROM reports WHERE status = 'resolved'")).Scan(&stats.Resolved)
-	_ = db.QueryRowContext(ctx, db.rebind("SELECT COUNT(*) FROM reports WHERE urgency = 'critical' AND status != 'resolved'")).Scan(&stats.Critical)
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM reports").Scan(&stats.TotalReports); err != nil {
+		return nil, err
+	}
+	if err := db.QueryRowContext(ctx, db.rebind("SELECT COUNT(*) FROM reports WHERE status IN ('reported', 'assigned', 'in_progress', 'on_the_way', 'arrived', 'animal_secured', 'transporting', 'at_vet')")).Scan(&stats.ActiveCases); err != nil {
+		return nil, err
+	}
+	if err := db.QueryRowContext(ctx, db.rebind("SELECT COUNT(*) FROM reports WHERE status = 'resolved'")).Scan(&stats.Resolved); err != nil {
+		return nil, err
+	}
+	if err := db.QueryRowContext(ctx, db.rebind("SELECT COUNT(*) FROM reports WHERE urgency = 'critical' AND status NOT IN ('resolved', 'closed')")).Scan(&stats.Critical); err != nil {
+		return nil, err
+	}
 
 	return stats, nil
 }
 
 func (db *DB) GetAllReportsForExport(ctx context.Context) ([]*models.Report, error) {
-	reports, _, err := db.GetReports(ctx, ReportFilter{Limit: 10000})
-	return reports, err
-}
-
-func (db *DB) SeedDefaultData(ctx context.Context) error {
-	// Seed Admin and Responder users if table is empty
-	userCount, err := db.CountUsers(ctx)
-	if err == nil && userCount == 0 {
-		adminPass, _ := auth.HashPassword("adminpassword123")
-		admin := &models.User{
-			ID:           uuid.New().String(),
-			Name:         "Lead Dispatcher Admin",
-			Email:        "admin@pawsos.org",
-			PasswordHash: adminPass,
-			Role:         models.RoleAdmin,
-			Phone:        "+1 555-0199",
-			Organization: "PawSOS Central Command",
-			CreatedAt:    time.Now().Add(-72 * time.Hour),
+	const pageSize = 1000
+	var allReports []*models.Report
+	for offset := 0; ; offset += pageSize {
+		reports, _, err := db.GetReports(ctx, ReportFilter{Limit: pageSize, Offset: offset})
+		if err != nil {
+			return nil, err
 		}
-		_ = db.CreateUser(ctx, admin)
-
-		responderPass, _ := auth.HashPassword("responder123")
-		responder := &models.User{
-			ID:           uuid.New().String(),
-			Name:         "Unit 4 - Sarah Jenkins",
-			Email:        "responder@pawsos.org",
-			PasswordHash: responderPass,
-			Role:         models.RoleResponder,
-			Phone:        "+1 555-0248",
-			Organization: "City Animal Rescue Taskforce",
-			CreatedAt:    time.Now().Add(-48 * time.Hour),
-		}
-		_ = db.CreateUser(ctx, responder)
-	}
-
-	// Seed realistic demo reports if reports table is empty
-	var reportCount int64
-	_ = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM reports").Scan(&reportCount)
-	if reportCount == 0 {
-		now := time.Now()
-		cases := []struct {
-			id, animal, urgency, condition, desc, address, area, city, status string
-			lat, lng                                                          float64
-			hoursAgo                                                          int
-		}{
-			{
-				id:        "PAW-4812",
-				animal:    "dog",
-				urgency:   "critical",
-				condition: "Fractured right leg, unable to walk, bleeding slightly near shoulder",
-				desc:      "Found on median strip after vehicle strike. Responsive but in acute shock.",
-				address:   "342 Elm Street, near intersection with 4th Ave",
-				area:      "Downtown",
-				city:      "Metropolis",
-				status:    "in_progress",
-				lat:       37.7749,
-				lng:       -122.4194,
-				hoursAgo:  3,
-			},
-			{
-				id:        "PAW-4813",
-				animal:    "cat",
-				urgency:   "urgent",
-				condition: "Trapped in deep stormwater storm drain, crying for several hours",
-				desc:      "Kitten approximately 3-4 months old. Visible at bottom of grate, about 6 feet down.",
-				address:   "89 Pine Valley Road, curb adjacent to school park",
-				area:      "Westside",
-				city:      "Metropolis",
-				status:    "assigned",
-				lat:       37.7833,
-				lng:       -122.4167,
-				hoursAgo:  2,
-			},
-			{
-				id:        "PAW-4814",
-				animal:    "dog",
-				urgency:   "moderate",
-				condition: "Severe dehydration, severe mange and skin infection, limping",
-				desc:      "Wandering around supermarket loading dock looking for food scraps.",
-				address:   "1200 Industrial Parkway, dock #4",
-				area:      "North Industrial",
-				city:      "Metropolis",
-				status:    "reported",
-				lat:       37.7650,
-				lng:       -122.4300,
-				hoursAgo:  1,
-			},
-			{
-				id:        "PAW-4810",
-				animal:    "bird",
-				urgency:   "moderate",
-				condition: "Damaged left wing, grounded on pedestrian footpath",
-				desc:      "Red-tailed hawk unable to take off. Secured in safe perimeter by bystander.",
-				address:   "Civic Plaza Park, south fountain",
-				area:      "Civic Center",
-				city:      "Metropolis",
-				status:    "resolved",
-				lat:       37.7790,
-				lng:       -122.4180,
-				hoursAgo:  18,
-			},
-		}
-
-		for _, c := range cases {
-			t := now.Add(-time.Duration(c.hoursAgo) * time.Hour)
-			rep := &models.Report{
-				ID:            c.id,
-				AnimalType:    c.animal,
-				Urgency:       models.UrgencyLevel(c.urgency),
-				Condition:     c.condition,
-				Description:   c.desc,
-				Status:        models.ReportStatus(c.status),
-				ReporterName:  "Citizen Witness",
-				ReporterPhone: "+1 555-0182",
-				Address:       c.address,
-				Area:          c.area,
-				City:          c.city,
-				Latitude:      c.lat,
-				Longitude:     c.lng,
-				CreatedAt:     t,
-				UpdatedAt:     t,
-			}
-			if c.status == "assigned" || c.status == "in_progress" {
-				respID := "unit-4"
-				respName := "Unit 4 - Sarah Jenkins"
-				rep.AssignedResponderID = &respID
-				rep.AssignedResponderName = &respName
-			}
-			_ = db.CreateReport(ctx, rep)
+		allReports = append(allReports, reports...)
+		if len(reports) < pageSize {
+			return allReports, nil
 		}
 	}
-
-	return nil
 }

@@ -11,9 +11,10 @@ const STORAGE_USER_KEY = 'pawsos_active_user_v2';
 class PawStore {
   constructor() {
     this.listeners = [];
-    this.cases = this.loadLocalCache();
+    this.cases = [];
     this.activeUser = this.loadActiveUser();
     this.isOnline = true;
+    this.sanitizeStoredCache();
 
     // Listen for storage events across tabs
     window.addEventListener('storage', (e) => {
@@ -26,6 +27,12 @@ class PawStore {
     // Auto-sync with Go backend on startup
     if (typeof window !== 'undefined') {
       setTimeout(() => this.syncWithBackend(), 50);
+      setInterval(() => {
+        if (document.visibilityState === 'visible') this.syncWithBackend();
+      }, 30000);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') this.syncWithBackend();
+      });
     }
   }
 
@@ -36,7 +43,7 @@ class PawStore {
     const timeline = (rep.timeline || []).map(t => ({
       status: t.status || 'reported',
       time: t.created_at || new Date().toISOString(),
-      author: t.author_name || 'System',
+      author: t.author_name || '',
       note: t.note || ''
     }));
 
@@ -46,43 +53,41 @@ class PawStore {
         id: rep.assigned_responder_id || '',
         name: rep.assigned_responder_name,
         role: 'Authorized Responder',
-        organization: 'PawSOS Rescue Network',
-        etaText: rep.status === 'resolved' ? 'Completed' : 'On Scene / In Transit'
+        organization: '',
+        etaText: rep.eta || ''
       };
     }
 
     return {
       id: rep.id,
-      animalType: rep.animal_type || 'dog',
-      animalName: rep.animal_name || `${(rep.animal_type || 'Animal').toUpperCase()} in distress`,
-      photo: rep.photo_url || (rep.animal_type === 'cat' ? 'assets/cat-sample.jpg' : 'assets/dog-sample.jpg'),
-      urgency: rep.urgency || 'urgent',
+      animalType: rep.animal_type || 'animal',
+      animalName: rep.animal_name || (rep.animal_type || 'Animal'),
+      photo: rep.photo_url || '',
+      urgency: rep.urgency || 'moderate',
       condition: rep.condition || '',
       description: rep.description || '',
       location: {
         address: rep.address || '',
         area: rep.area || '',
         city: rep.city || '',
-        lat: rep.latitude || 37.7749,
-        lng: rep.longitude || -122.4194
+        lat: Number(rep.latitude),
+        lng: Number(rep.longitude),
+        accuracy: Number.isFinite(rep.location_accuracy) ? rep.location_accuracy : null,
+        timestamp: rep.location_timestamp || null,
+        source: rep.location_source || ''
       },
       reporter: {
-        name: rep.reporter_name || 'Citizen',
+        name: rep.reporter_name || '',
         phone: rep.reporter_phone || '',
         isPublicContact: false
       },
       status: rep.status || 'reported',
+      eta: rep.eta || '',
       createdAt: rep.created_at || new Date().toISOString(),
       updatedAt: rep.updated_at || rep.created_at,
       responder: responder,
-      timeline: timeline.length > 0 ? timeline : [
-        {
-          status: rep.status || 'reported',
-          time: rep.created_at || new Date().toISOString(),
-          author: rep.reporter_name || 'Citizen',
-          note: 'Case submitted to PawSOS dispatch.'
-        }
-      ]
+      evidence: rep.evidence || null,
+      timeline
     };
   }
 
@@ -92,7 +97,7 @@ class PawStore {
       if (data) {
         const parsed = JSON.parse(data);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return this.publicCacheProjection(parsed);
         }
       }
     } catch (e) {
@@ -101,9 +106,49 @@ class PawStore {
     return [];
   }
 
+  publicCacheProjection(cases) {
+    return cases.filter(item => item && typeof item === 'object' && typeof item.id === 'string').map(item => {
+      const location = item.location && typeof item.location === 'object' ? item.location : null;
+      const timeline = Array.isArray(item.timeline) ? item.timeline : [];
+      return {
+        ...item,
+        location: location ? {
+          ...location,
+          address: '',
+          area: '',
+          city: '',
+          accuracy: null,
+          timestamp: null,
+          source: '',
+          lat: Number.isFinite(location.lat) ? Math.round(location.lat * 1000) / 1000 : null,
+          lng: Number.isFinite(location.lng) ? Math.round(location.lng * 1000) / 1000 : null
+        } : null,
+        reporter: { name: '', phone: '', isPublicContact: false },
+        responder: null,
+        evidence: null,
+        timeline: timeline.filter(entry => entry && typeof entry === 'object').map(entry => ({
+          ...entry,
+          author: '',
+          note: ''
+        }))
+      };
+    });
+  }
+
+  sanitizeStoredCache() {
+    try {
+      const stored = localStorage.getItem(STORAGE_CASES_KEY);
+      if (!stored) return;
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) this.saveLocalCache(parsed);
+    } catch (e) {
+      console.warn('Could not sanitize the stored case cache', e);
+    }
+  }
+
   saveLocalCache(cases) {
     try {
-      localStorage.setItem(STORAGE_CASES_KEY, JSON.stringify(cases));
+      localStorage.setItem(STORAGE_CASES_KEY, JSON.stringify(this.publicCacheProjection(cases)));
     } catch (e) {
       console.error('Failed to cache cases locally', e);
     }
@@ -181,31 +226,21 @@ class PawStore {
 
   async fetchFreshCaseById(id) {
     if (!id) return null;
-    if (window.pawAPI) {
-      try {
-        const rep = await window.pawAPI.getReport(id);
-        const norm = this.normalizeBackendReport(rep);
-        // update local list
-        const idx = this.cases.findIndex(c => c.id === norm.id);
-        if (idx >= 0) {
-          this.cases[idx] = norm;
-        } else {
-          this.cases.unshift(norm);
-        }
-        this.saveLocalCache(this.cases);
-        this.notify();
-        return norm;
-      } catch (e) {
-        console.warn('Could not fetch fresh case from API, using cached:', e.message);
-      }
-    }
-    return this.getCaseById(id);
+    if (!window.pawAPI) throw new Error('The report service is unavailable.');
+    const rep = await window.pawAPI.getReport(id);
+    const norm = this.normalizeBackendReport(rep);
+    const idx = this.cases.findIndex(c => c.id === norm.id);
+    if (idx >= 0) this.cases[idx] = norm;
+    else this.cases.unshift(norm);
+    this.saveLocalCache(this.cases);
+    return norm;
   }
 
   getMyReportIds() {
     try {
       const ids = localStorage.getItem(STORAGE_MY_REPORTS_KEY);
-      return ids ? JSON.parse(ids) : [];
+      const parsed = ids ? JSON.parse(ids) : [];
+      return Array.isArray(parsed) ? parsed.filter(id => typeof id === 'string' && id.length <= 64) : [];
     } catch (e) {
       return [];
     }
@@ -230,6 +265,22 @@ class PawStore {
     return copy;
   }
 
+  async getNearbyCases(latitude, longitude, maxDistanceKm = 5) {
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') return [];
+    const result = await window.pawAPI.getReports({
+      status: 'active',
+      latitude,
+      longitude,
+      radiusKm: maxDistanceKm,
+      limit: 100
+    });
+    return (result.reports || []).map(report => {
+      const normalized = this.normalizeBackendReport(report);
+      normalized.distanceKm = Number.isFinite(report.distance_meters) ? report.distance_meters / 1000 : null;
+      return normalized;
+    });
+  }
+
   getStats() {
     const total = this.cases.length;
     const active = this.cases.filter(c => c.status !== 'resolved' && c.status !== 'closed').length;
@@ -241,70 +292,35 @@ class PawStore {
   // --- Mutation Methods (Persisted directly to Backend & DB) ---
 
   async createReport(formData, photoFile = null) {
-    let createdRecord = null;
-
-    if (window.pawAPI) {
-      try {
-        const payload = {
-          animal_type: formData.animalType || 'dog',
-          animal_name: formData.animalName || '',
-          urgency: formData.urgency || 'urgent',
-          condition: formData.condition || 'Distress reported',
-          description: formData.description || '',
-          address: formData.address || '',
-          area: formData.area || '',
-          city: formData.city || 'Metropolis',
-          latitude: formData.lat || 37.7749,
-          longitude: formData.lng || -122.4194,
-          reporter_name: formData.reporterName || 'Citizen',
-          reporter_phone: formData.reporterPhone || ''
-        };
-
-        const res = await window.pawAPI.createReport(payload, photoFile);
-        if (res && res.id) {
-          createdRecord = this.normalizeBackendReport(res);
-        }
-      } catch (err) {
-        console.warn('API report creation error, creating local fallback:', err.message);
-      }
+    if (!window.pawAPI) throw new Error('PawSOS could not connect to the report service. Your report has not been submitted.');
+    const payload = {
+      animal_type: formData.animalType,
+      animal_name: formData.animalName || '',
+      urgency: formData.urgency,
+      condition: formData.condition,
+      description: formData.description || '',
+      address: formData.address || '',
+      area: formData.area || '',
+      city: formData.city || '',
+      latitude: formData.lat,
+      longitude: formData.lng,
+      location_accuracy: formData.locationAccuracy,
+      location_timestamp: formData.locationTimestamp,
+      location_source: formData.locationSource,
+      photo_source: formData.photoSource,
+      photo_captured_at: formData.photoCapturedAt,
+      photo_location_accuracy: formData.photoLocationAccuracy,
+      photo_latitude: formData.photoLatitude,
+      photo_longitude: formData.photoLongitude,
+      reporter_name: formData.reporterName,
+      reporter_phone: formData.reporterPhone,
+      confirm_duplicate: formData.confirmDuplicate === true
+    };
+    const res = await window.pawAPI.createReport(payload, photoFile);
+    if (!res || !res.id) {
+      throw new Error('PawSOS did not confirm this report. It has not been submitted.');
     }
-
-    // Local fallback if API failed or offline
-    if (!createdRecord) {
-      const randomDigits = Math.floor(1000 + Math.random() * 9000);
-      createdRecord = {
-        id: `PAW-${randomDigits}`,
-        animalType: formData.animalType || 'dog',
-        animalName: formData.animalName || `${formData.animalType || 'Animal'} in distress`,
-        photo: formData.photo || 'assets/dog-sample.jpg',
-        urgency: formData.urgency || 'urgent',
-        condition: formData.condition || 'Animal in distress reported',
-        description: formData.description || '',
-        location: {
-          address: formData.address || 'Address provided',
-          area: formData.area || '',
-          city: formData.city || 'Metropolis',
-          lat: formData.lat || 37.7749,
-          lng: formData.lng || -122.4194
-        },
-        reporter: {
-          name: formData.reporterName || 'Citizen',
-          phone: formData.reporterPhone || '',
-          isPublicContact: false
-        },
-        status: 'reported',
-        createdAt: new Date().toISOString(),
-        responder: null,
-        timeline: [
-          {
-            status: 'reported',
-            time: new Date().toISOString(),
-            author: formData.reporterName || 'Citizen',
-            note: 'Report registered.'
-          }
-        ]
-      };
-    }
+    const createdRecord = this.normalizeBackendReport(res);
 
     this.cases.unshift(createdRecord);
     this.saveLocalCache(this.cases);
@@ -321,98 +337,44 @@ class PawStore {
   }
 
   async assignResponder(caseId, responderInfo) {
-    if (window.pawAPI && window.pawAPI.isAuthenticated()) {
-      try {
-        const res = await window.pawAPI.assignReport(caseId, responderInfo);
-        const norm = this.normalizeBackendReport(res);
-        const idx = this.cases.findIndex(c => c.id === caseId);
-        if (idx >= 0) this.cases[idx] = norm;
-        this.saveLocalCache(this.cases);
-        this.notify();
-        return norm;
-      } catch (err) {
-        console.warn('API assign failed:', err.message);
-      }
-    }
-
-    // Local update
-    const target = this.getCaseById(caseId);
-    if (!target) return null;
-
-    target.status = 'assigned';
-    target.responder = {
-      name: responderInfo.name || 'Volunteer Responder',
-      role: responderInfo.role || 'Volunteer Rescuer',
-      organization: responderInfo.organization || 'PawSOS Unit',
-      etaText: responderInfo.eta || responderInfo.etaText || '15-20 mins'
-    };
-    target.timeline.push({
-      status: 'assigned',
-      time: new Date().toISOString(),
-      author: target.responder.name,
-      note: `Responder ${target.responder.name} assigned. ETA: ${target.responder.etaText}.`
-    });
-
+    if (!window.pawAPI || !window.pawAPI.isAuthenticated()) throw new Error('Please sign in as a verified responder to accept a case.');
+    const res = await window.pawAPI.assignReport(caseId, responderInfo);
+    const norm = this.normalizeBackendReport(res);
+    const idx = this.cases.findIndex(c => c.id === caseId);
+    if (idx >= 0) this.cases[idx] = norm;
+    else this.cases.unshift(norm);
     this.saveLocalCache(this.cases);
     this.notify();
-    return target;
+    return norm;
   }
 
   async updateCaseStatus(caseId, newStatus, noteText = '', authorName = 'Responder') {
-    if (window.pawAPI && window.pawAPI.isAuthenticated()) {
-      try {
-        const res = await window.pawAPI.updateStatus(caseId, newStatus, noteText);
-        const norm = this.normalizeBackendReport(res);
-        const idx = this.cases.findIndex(c => c.id === caseId);
-        if (idx >= 0) this.cases[idx] = norm;
-        this.saveLocalCache(this.cases);
-        this.notify();
-        return norm;
-      } catch (err) {
-        console.warn('API status update failed:', err.message);
-      }
-    }
-
-    const target = this.getCaseById(caseId);
-    if (!target) return null;
-
-    target.status = newStatus;
-    target.timeline.push({
-      status: newStatus,
-      time: new Date().toISOString(),
-      author: authorName,
-      note: noteText || `Case marked as ${newStatus.replace('_', ' ').toUpperCase()}.`
-    });
-
+    if (!window.pawAPI || !window.pawAPI.isAuthenticated()) throw new Error('Please sign in as a verified responder to update a case.');
+    const res = await window.pawAPI.updateStatus(caseId, newStatus, noteText);
+    const norm = this.normalizeBackendReport(res);
+    const idx = this.cases.findIndex(c => c.id === caseId);
+    if (idx >= 0) this.cases[idx] = norm;
+    else this.cases.unshift(norm);
     this.saveLocalCache(this.cases);
     this.notify();
-    return target;
+    return norm;
   }
 
   async addCaseNote(caseId, noteText, authorName = 'Personnel') {
-    if (window.pawAPI && window.pawAPI.isAuthenticated()) {
-      try {
-        await window.pawAPI.addNote(caseId, noteText, authorName);
-        return this.fetchFreshCaseById(caseId);
-      } catch (err) {
-        console.warn('API add note failed:', err.message);
-      }
-    }
-
-    const target = this.getCaseById(caseId);
-    if (!target || !noteText) return null;
-
-    target.timeline.push({
-      status: target.status,
-      time: new Date().toISOString(),
-      author: authorName,
-      note: noteText.trim()
-    });
-
-    this.saveLocalCache(this.cases);
-    this.notify();
-    return target;
+    if (!window.pawAPI || !window.pawAPI.isAuthenticated()) throw new Error('Please sign in as a verified responder to add a field note.');
+    await window.pawAPI.addNote(caseId, noteText, authorName);
+    return this.fetchFreshCaseById(caseId);
   }
 }
+
+window.pawEscapeHTML = function (value) {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[character]);
+};
 
 window.pawStore = new PawStore();
